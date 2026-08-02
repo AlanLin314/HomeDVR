@@ -170,6 +170,99 @@
   box-sizing: border-box;
 }
 
+/* ── Theme cross-fade (day ↔ night) ──────────────────── */
+
+/* View Transitions API (Chrome / Edge / Safari 18+) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  animation-name: theme-vt-out;
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  animation-name: theme-vt-in;
+  z-index: 2;
+}
+
+@keyframes theme-vt-out {
+  from {
+    opacity: 1;
+    filter: brightness(1) saturate(1);
+  }
+  to {
+    opacity: 0;
+    filter: brightness(1.05) saturate(0.9);
+  }
+}
+
+@keyframes theme-vt-in {
+  from {
+    opacity: 0;
+    filter: brightness(0.95) saturate(0.95);
+  }
+  to {
+    opacity: 1;
+    filter: brightness(1) saturate(1);
+  }
+}
+
+/* Fallback when View Transitions is unavailable: tween common paints */
+html.theme-animating,
+html.theme-animating body,
+html.theme-animating #app,
+html.theme-animating .app-shell,
+html.theme-animating .page-main,
+html.theme-animating .page-scroll,
+html.theme-animating .topbar,
+html.theme-animating .bottom-nav,
+html.theme-animating .card,
+html.theme-animating .glass,
+html.theme-animating .glass-elevated,
+html.theme-animating .btn,
+html.theme-animating .chip,
+html.theme-animating .nav-link,
+html.theme-animating .icon-btn,
+html.theme-animating .item-card,
+html.theme-animating .toast,
+html.theme-animating .log-box,
+html.theme-animating input,
+html.theme-animating select,
+html.theme-animating textarea,
+html.theme-animating .table-desktop th,
+html.theme-animating .table-desktop td,
+html.theme-animating .badge,
+html.theme-animating .commit-card,
+html.theme-animating .empty-state {
+  transition:
+    color 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    fill 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    stroke 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.42s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+
+  html.theme-animating,
+  html.theme-animating * {
+    transition: none !important;
+  }
+}
+
 html,
 body {
   margin: 0;
