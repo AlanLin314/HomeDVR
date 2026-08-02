@@ -24,12 +24,7 @@ export { toast };
 type NavKey = "wall" | "cameras" | "system";
 
 /**
- * Shell layout:
- *   app-shell
- *     topbar
- *     page-main (flex, overflow hidden)
- *       page-scroll (ONLY scroll container)
- *     bottom-nav
+ * Shell: page content full-bleed; topbar/bottom-nav float as glass over video.
  */
 function shell(active: NavKey): {
   root: HTMLElement;
@@ -37,8 +32,17 @@ function shell(active: NavKey): {
   scroll: HTMLElement;
 } {
   const root = document.createElement("div");
-  root.className = "app-shell";
+  root.className = "app-shell" + (active === "wall" ? " is-wall" : "");
 
+  // Content first (under navs)
+  const main = document.createElement("div");
+  main.className = "page-main";
+  const scroll = document.createElement("div");
+  scroll.className = "page-scroll";
+  main.appendChild(scroll);
+  root.appendChild(main);
+
+  // Floating glass topbar (desktop)
   const bar = document.createElement("header");
   bar.className = "topbar";
   bar.innerHTML = `
@@ -54,14 +58,7 @@ function shell(active: NavKey): {
   `;
   root.appendChild(bar);
 
-  const main = document.createElement("div");
-  main.className = "page-main";
-
-  const scroll = document.createElement("div");
-  scroll.className = "page-scroll";
-  main.appendChild(scroll);
-  root.appendChild(main);
-
+  // Floating glass bottom nav (mobile)
   const bottom = document.createElement("nav");
   bottom.className = "bottom-nav";
   bottom.setAttribute("aria-label", "主導覽");
