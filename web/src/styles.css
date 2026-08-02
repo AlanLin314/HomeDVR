@@ -539,8 +539,7 @@ a:hover {
     pointer-events: none;
   }
 
-  /* Hover top band or the chrome itself */
-  .tile:hover .tile-top-hit ~ .tile-chrome,
+  /* Only top band / chrome itself — not whole-tile hover */
   .tile-top-hit:hover ~ .tile-chrome,
   .tile-chrome:hover,
   .tile:focus-within .tile-chrome,
@@ -551,8 +550,9 @@ a:hover {
     pointer-events: auto;
   }
 
-  /* When chrome visible, extend hit so moving to buttons doesn't hide */
-  .tile:hover .tile-top-hit {
+  /* Keep hit tall enough while interacting with toolbar */
+  .tile-top-hit:hover,
+  .tile-chrome:hover ~ .tile-top-hit {
     height: 72px;
   }
 }
