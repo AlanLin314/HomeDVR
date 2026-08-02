@@ -674,9 +674,9 @@ a:hover {
 .wall {
   flex: 0 0 auto;
   display: grid;
-  /* hairline gap only — no thick black frames around cameras */
-  gap: 2px;
-  padding: 0 2px 12px;
+  /* small gap so rounded corners show; no black border frames */
+  gap: 8px;
+  padding: 0 8px 12px;
   min-height: 0;
   height: auto;
   align-content: start;
@@ -700,7 +700,7 @@ a:hover {
   position: relative;
   background: transparent;
   overflow: hidden;
-  border-radius: 0;
+  border-radius: var(--radius-md);
   border: none;
   box-shadow: none;
   display: flex;
@@ -823,8 +823,8 @@ a:hover {
 
 @media (max-width: 639px) {
   .wall {
-    gap: 2px;
-    padding: 0 0 calc(12px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
+    padding: 0 8px calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .tile-chrome {
