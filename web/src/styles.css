@@ -53,6 +53,8 @@ html,
 body {
   margin: 0;
   height: 100%;
+  max-height: 100%;
+  overflow: hidden;
   font-family: var(--font);
   color: var(--text);
   background: var(--bg0);
@@ -62,6 +64,7 @@ body {
 
 body {
   min-height: 100dvh;
+  max-height: 100dvh;
   background:
     radial-gradient(1200px 700px at 10% -10%, rgba(91, 157, 255, 0.28), transparent 55%),
     radial-gradient(900px 600px at 100% 0%, rgba(124, 107, 255, 0.22), transparent 50%),
@@ -80,10 +83,12 @@ a:hover {
 }
 
 #app {
-  min-height: 100dvh;
-  min-height: 100svh;
+  height: 100%;
+  max-height: 100dvh;
+  max-height: 100svh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* ── Glass utilities ─────────────────────────────────── */
@@ -148,10 +153,7 @@ a:hover {
   font-size: 1.05rem;
   font-weight: 650;
   letter-spacing: 0.01em;
-  background: var(--accent-grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #fff;
 }
 
 .topbar .brand {
@@ -439,23 +441,36 @@ a:hover {
 
 /* ── Wall ────────────────────────────────────────────── */
 
-/* Main content area: always scrollable so long settings pages work */
+/* Flex slot under topbar — does not scroll itself */
 .page-main {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+/* ONLY scroll container for wall + cameras + system */
+.page-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  /* Extra space above bottom nav / safe area */
-  padding-bottom: 1rem;
+  /* clear floating bottom nav */
+  padding-bottom: calc(1.25rem + var(--safe-bottom));
 }
 
-.page-main.settings {
-  /* form pages need more bottom room so last fields aren't under the nav */
-  padding-bottom: calc(1.5rem + var(--safe-bottom));
+.page-scroll.settings {
+  padding-bottom: calc(2.5rem + var(--bottom-nav-h) + var(--safe-bottom));
+}
+
+@media (min-width: 769px) {
+  .page-scroll.settings {
+    padding-bottom: 3rem;
+  }
 }
 
 .wall-wrap {
@@ -464,7 +479,6 @@ a:hover {
   flex-direction: column;
   min-height: 0;
   height: auto;
-  /* scroll happens on .page-main, not nested here */
   overflow: visible;
 }
 
@@ -776,21 +790,14 @@ a:hover {
 .settings {
   max-width: 920px;
   margin: 0 auto;
-  padding: 1rem 1rem 2.5rem;
+  padding: 1rem 1rem 1.5rem;
   width: 100%;
   box-sizing: border-box;
 }
 
 @media (min-width: 769px) {
   .settings {
-    padding: 1.25rem 1.25rem 3rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .settings {
-    /* last cards clear the floating bottom tab bar */
-    padding-bottom: calc(2rem + var(--bottom-nav-h) + var(--safe-bottom));
+    padding: 1.25rem 1.25rem 1.5rem;
   }
 }
 

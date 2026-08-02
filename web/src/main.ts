@@ -23,7 +23,19 @@ export { toast };
 
 type NavKey = "wall" | "cameras" | "system";
 
-function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
+/**
+ * Shell layout:
+ *   app-shell
+ *     topbar
+ *     page-main (flex, overflow hidden)
+ *       page-scroll (ONLY scroll container)
+ *     bottom-nav
+ */
+function shell(active: NavKey): {
+  root: HTMLElement;
+  main: HTMLElement;
+  scroll: HTMLElement;
+} {
   const root = document.createElement("div");
   root.className = "app-shell";
 
@@ -44,6 +56,10 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
 
   const main = document.createElement("div");
   main.className = "page-main";
+
+  const scroll = document.createElement("div");
+  scroll.className = "page-scroll";
+  main.appendChild(scroll);
   root.appendChild(main);
 
   const bottom = document.createElement("nav");
@@ -65,13 +81,12 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
   `;
   root.appendChild(bottom);
 
-  return { root, main };
+  return { root, main, scroll };
 }
 
 async function render() {
   let { path, params } = parseRoute();
 
-  // legacy redirects
   if (path === "/settings" || path === "/settings/cameras") {
     const q = params.toString();
     history.replaceState({}, "", q ? `/cameras?${q}` : "/cameras");
@@ -84,27 +99,26 @@ async function render() {
   app.innerHTML = "";
 
   if (path === "/cameras" || path === "/camera") {
-    const { root, main } = shell("cameras");
-    main.classList.add("settings");
+    const { root, scroll } = shell("cameras");
+    scroll.classList.add("settings");
     app.appendChild(root);
-    await renderCameraSettings(main, toast, {
+    await renderCameraSettings(scroll, toast, {
       editId: params.get("edit"),
     });
     return;
   }
 
   if (path === "/system") {
-    const { root, main } = shell("system");
-    main.classList.add("settings");
+    const { root, scroll } = shell("system");
+    scroll.classList.add("settings");
     app.appendChild(root);
-    await renderSystemSettings(main, toast);
+    await renderSystemSettings(scroll, toast);
     return;
   }
 
-  // / → wall (home)
-  const { root, main } = shell("wall");
+  const { root, scroll } = shell("wall");
   app.appendChild(root);
-  await renderWall(main, root, toast);
+  await renderWall(scroll, root, toast);
 }
 
 migrateHashRoute();

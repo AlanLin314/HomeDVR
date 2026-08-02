@@ -29,26 +29,24 @@ export async function renderSystemSettings(
     <div class="card glass">
       <h3>外網存取</h3>
       <p class="muted" style="margin-top:0">
-        給 Cloudflare Tunnel / 同事看的設定。儲存後寫入資料庫與
-        <span class="mono">.env</span>，不必進 Docker 終端改。
+        設定外網網址與 Tunnel 指向，方便 Cloudflare / 同事對接。
       </p>
       <form class="form-grid" id="remote-form" style="margin-top:0.85rem">
         <label>
-          外網網址（PUBLIC_BASE_URL）
+          外網網址
           <input type="url" id="public-url" placeholder="https://dvr.flaremetal.com" autocomplete="off" />
         </label>
         <label>
-          Tunnel 服務位址（填到 Cloudflare Public Hostname → URL）
+          Tunnel 服務位址（Cloudflare → Service URL）
           <div class="input-with-btn">
             <input type="text" id="tunnel-service" placeholder="http://homedvr:8080" autocomplete="off" />
             <button type="button" class="btn" id="copy-tunnel-btn">複製</button>
           </div>
         </label>
         <label>
-          主機專案路徑（HOMEDVR_HOST_PATH）
+          主機專案路徑
           <input type="text" id="host-path" placeholder="/root/HomeDVR" autocomplete="off" />
         </label>
-        <p class="muted" id="env-hint" style="margin:0"></p>
         <div class="row-actions">
           <button type="submit" class="btn btn-primary" id="save-remote-btn">儲存</button>
         </div>
@@ -81,7 +79,6 @@ export async function renderSystemSettings(
   const copyTunnelBtn = main.querySelector(
     "#copy-tunnel-btn",
   ) as HTMLButtonElement;
-  const envHint = main.querySelector("#env-hint") as HTMLElement;
   const remoteForm = main.querySelector("#remote-form") as HTMLFormElement;
 
   let enableWebUpdate = false;
@@ -103,9 +100,6 @@ export async function renderSystemSettings(
       hostPathEl.value = settings.hostPath || "";
       tunnelServiceEl.value =
         settings.tunnelServiceUrl || "http://homedvr:8080";
-      envHint.textContent = settings.envFileWritable
-        ? "儲存後會同步寫入 .env"
-        : "無法寫入 .env（仍會存進資料庫，重啟後以資料庫為準）";
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), "error");
     }
