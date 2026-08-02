@@ -535,11 +535,6 @@ a:hover {
   grid-auto-rows: auto;
 }
 
-.chip-bar {
-  /* ensure chips sit fully below topbar (parent already padded) */
-  margin-top: 0;
-}
-
 .wall[data-cols="1"] {
   grid-template-columns: 1fr;
 }
