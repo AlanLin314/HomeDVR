@@ -63,19 +63,14 @@ function viewportWidth(): number {
 }
 
 /**
- * Max concurrent live streams.
- * Mobile GPUs / Safari only keep a few hardware decoders alive at once;
- * starting every tile kills the whole wall.
+ * Max concurrent live streams on constrained devices (phone / iPad).
+ * Desktop has no cap — all cameras play at once.
  */
 function maxConcurrentStreams(): number {
   const w = viewportWidth();
-  if (isConstrainedDevice()) {
-    if (w < 640) return 2; // phone: typically 1–2 tiles on screen
-    if (w < 1100) return 4; // iPad portrait / small tablet
-    return 6; // iPad landscape
-  }
-  if (w < 768) return 3;
-  return 12; // desktop / large screens
+  if (w < 640) return 2; // phone: typically 1–2 tiles on screen
+  if (w < 1100) return 4; // iPad portrait / small tablet
+  return 6; // iPad landscape
 }
 
 function loadFilter(): Filter {
@@ -188,11 +183,13 @@ export async function renderWall(
     visibility.clear();
   };
 
-  /**
-   * Only decode streams that are on-screen (or nearly), up to a device cap.
-   * Off-screen tiles stay idle so phone/iPad GPU decoder slots aren't exhausted.
-   */
+  /** Desktop: play every camera. Phone/iPad: only visible tiles up to a cap. */
   const reconcileStreams = () => {
+    if (!isConstrainedDevice()) {
+      for (const handle of players.values()) handle.start();
+      return;
+    }
+
     const max = maxConcurrentStreams();
     const ranked = [...visibility.entries()]
       .filter(([, ratio]) => ratio > 0)
@@ -219,6 +216,15 @@ export async function renderWall(
     streamObserver = null;
     visibility.clear();
 
+    // Desktop / laptop: start all streams immediately (no viewport gating)
+    if (!isConstrainedDevice()) {
+      for (const [id, handle] of players) {
+        visibility.set(id, 1);
+        handle.start();
+      }
+      return;
+    }
+
     if (typeof IntersectionObserver === "undefined") {
       // Fallback: start up to the cap in paint order
       let n = 0;
@@ -236,7 +242,7 @@ export async function renderWall(
       return;
     }
 
-    // rootMargin: warm up slightly before fully on-screen
+    // Phone / iPad: only decode on-screen tiles (GPU decoder slots are scarce)
     streamObserver = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
