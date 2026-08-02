@@ -29,7 +29,7 @@ export async function renderSystemSettings(
     <div class="card glass">
       <h3>外網存取</h3>
       <p class="muted" style="margin-top:0">
-        設定外網網址與 Tunnel 指向，方便 Cloudflare / 同事對接。
+        設定外網網址與 Tunnel 服務位址。
       </p>
       <form class="form-grid" id="remote-form" style="margin-top:0.85rem">
         <label>

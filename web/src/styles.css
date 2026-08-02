@@ -461,6 +461,15 @@ a:hover {
   overscroll-behavior-y: contain;
   /* clear floating bottom nav */
   padding-bottom: calc(1.25rem + var(--safe-bottom));
+  /* hide scrollbar, still scrollable */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.page-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .page-scroll.settings {
@@ -519,12 +528,18 @@ a:hover {
   min-height: 0;
 }
 
-/* Hover strip at top of tile (desktop) — reveals toolbar */
+/* Top strip — mouse hover / tap to reveal toolbar */
 .tile-top-hit {
-  display: none;
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  z-index: 4;
 }
 
-/* ── Tile toolbar: hidden until hover top / focus ── */
+/* Toolbar: hidden by default (incl. iPad) */
 .tile-chrome {
   position: absolute;
   top: 0;
@@ -543,6 +558,16 @@ a:hover {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   transition: opacity 0.15s ease, transform 0.15s ease;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+
+.tile.show-chrome .tile-chrome,
+.tile.expanded .tile-chrome {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
 }
 
 .tile-chrome .tile-title {
@@ -591,79 +616,24 @@ a:hover {
   background: rgba(91, 157, 255, 0.35);
 }
 
-/* Desktop / mouse: hide toolbar until hover near top of tile */
-@media (hover: hover) and (pointer: fine) {
-  .tile-top-hit {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    z-index: 4;
-    /* capture hover without blocking clicks on chrome when shown */
-  }
-
-  .tile-chrome {
-    opacity: 0;
-    transform: translateY(-6px);
-    pointer-events: none;
-  }
-
-  /* Only top band / chrome itself — not whole-tile hover */
-  .tile-top-hit:hover ~ .tile-chrome,
-  .tile-chrome:hover,
-  .tile:focus-within .tile-chrome,
-  .tile.expanded .tile-chrome,
-  .tile.show-chrome .tile-chrome {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-  }
-
-  /* Keep hit tall enough while interacting with toolbar */
-  .tile-top-hit:hover,
-  .tile-chrome:hover ~ .tile-top-hit {
-    height: 72px;
-  }
-}
-
-/* Touch devices: keep toolbar always visible (no reliable hover) */
-@media (hover: none), (pointer: coarse) {
-  .tile-chrome {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-    position: absolute;
-  }
-}
-
-/* In-flow video box — must keep height (never position:absolute on host) */
+/* 16:9 tiles — video covers, no letterbox bars */
 .player-host {
   position: relative;
   display: block;
   width: 100%;
   flex: 0 0 auto;
-  min-height: 200px;
+  min-height: 160px;
   aspect-ratio: 16 / 9;
   background: #000;
   overflow: hidden;
 }
 
-.wall[data-cols="1"] .player-host {
-  aspect-ratio: 16 / 9;
-  min-height: 200px;
-}
-
-.wall[data-cols="2"] .player-host {
-  aspect-ratio: 16 / 10;
-  min-height: 140px;
-}
-
+.wall[data-cols="1"] .player-host,
+.wall[data-cols="2"] .player-host,
 .wall[data-cols="3"] .player-host,
 .wall[data-cols="4"] .player-host {
-  aspect-ratio: 16 / 10;
-  min-height: 120px;
+  aspect-ratio: 16 / 9;
+  min-height: 140px;
 }
 
 @media (max-width: 639px) {
@@ -689,6 +659,11 @@ a:hover {
     background: rgba(7, 11, 20, 0.92);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    scrollbar-width: none;
+  }
+
+  .chip-bar::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -727,9 +702,15 @@ a:hover {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  /* fill 16:9 box — no top/bottom black bars */
+  object-fit: cover;
   object-position: center;
   background: #000;
+}
+
+.tile.expanded .player video {
+  /* fullscreen: show full frame if needed */
+  object-fit: contain;
 }
 
 .player-status {

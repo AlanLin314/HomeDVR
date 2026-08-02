@@ -47,7 +47,7 @@ function shell(active: NavKey): {
       <h1>HomeDVR</h1>
     </div>
     <nav class="desktop-nav">
-      <a class="nav-link ${active === "wall" ? "active" : ""}" href="/">多畫面牆</a>
+      <a class="nav-link ${active === "wall" ? "active" : ""}" href="/">主畫面</a>
       <a class="nav-link ${active === "cameras" ? "active" : ""}" href="/cameras">攝影機</a>
       <a class="nav-link ${active === "system" ? "active" : ""}" href="/system">系統</a>
     </nav>
@@ -68,7 +68,7 @@ function shell(active: NavKey): {
   bottom.innerHTML = `
     <a href="/" class="nav-link ${active === "wall" ? "active" : ""}">
       <span class="ico">▦</span>
-      <span>畫面牆</span>
+      <span>主畫面</span>
     </a>
     <a href="/cameras" class="nav-link ${active === "cameras" ? "active" : ""}">
       <span class="ico">📷</span>

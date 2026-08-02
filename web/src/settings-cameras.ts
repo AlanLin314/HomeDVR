@@ -56,7 +56,7 @@ export async function renderCameraSettings(
         </label>
         <label class="checkbox-row">
           <input type="checkbox" id="enabled" checked />
-          啟用（顯示在多畫面牆）
+          啟用（顯示在主畫面）
         </label>
         <div class="row-actions">
           <button type="submit" class="btn btn-primary btn-block-sm" id="save-btn">儲存</button>
@@ -249,7 +249,7 @@ export async function renderCameraSettings(
     try {
       const { cameras } = await listCameras();
       if (cameras.length === 0) {
-        tableWrap.innerHTML = `<p class="muted">尚無攝影機。<a href="/">回多畫面牆</a></p>`;
+        tableWrap.innerHTML = `<p class="muted">尚無攝影機。<a href="/">回主畫面</a></p>`;
         return;
       }
       tableWrap.innerHTML = `

@@ -31,6 +31,20 @@ function isMobile(): boolean {
   return window.matchMedia("(max-width: 768px)").matches;
 }
 
+/** iPad / phone / touch-first: tap to show toolbar (avoid sticky :hover) */
+function useTapChrome(): boolean {
+  const ua = navigator.userAgent || "";
+  if (/iPad|iPhone|iPod|Android/i.test(ua)) return true;
+  // iPadOS desktop UA
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) {
+    return true;
+  }
+  return (
+    window.matchMedia("(hover: none)").matches ||
+    window.matchMedia("(pointer: coarse)").matches
+  );
+}
+
 function viewportWidth(): number {
   return window.innerWidth || document.documentElement.clientWidth || 800;
 }
@@ -285,20 +299,49 @@ export async function renderWall(
       chrome.appendChild(actions);
       tile.appendChild(chrome);
 
-      // Touch: first tap near top toggles toolbar
-      topHit.addEventListener("click", (e) => {
-        if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      // Toolbar: desktop mouse hover top; iPad/phone tap top (not always visible)
+      if (useTapChrome()) {
+        topHit.addEventListener("click", (e) => {
           e.stopPropagation();
-          tile.classList.toggle("show-chrome");
-        }
-      });
+          const open = !tile.classList.contains("show-chrome");
+          document
+            .querySelectorAll(".tile.show-chrome")
+            .forEach((el) => el.classList.remove("show-chrome"));
+          if (open) tile.classList.add("show-chrome");
+        });
+        tile.addEventListener("click", (e) => {
+          if (
+            (e.target as HTMLElement).closest(
+              ".tile-actions, .tile-chrome, .tile-top-hit",
+            )
+          ) {
+            return;
+          }
+          tile.classList.remove("show-chrome");
+        });
+      } else {
+        topHit.addEventListener("mouseenter", () => {
+          tile.classList.add("show-chrome");
+        });
+        tile.addEventListener("mouseleave", () => {
+          tile.classList.remove("show-chrome");
+        });
+        chrome.addEventListener("mouseenter", () => {
+          tile.classList.add("show-chrome");
+        });
+      }
 
-      // mobile: single tap on tile body expands; desktop: double-click
-      if (isMobile()) {
+      // mobile: double-tap expands; desktop: double-click
+      if (isMobile() || useTapChrome()) {
         let lastTap = 0;
         tile.addEventListener("click", (e) => {
-          if ((e.target as HTMLElement).closest(".tile-actions, .tile-chrome, .tile-top-hit"))
+          if (
+            (e.target as HTMLElement).closest(
+              ".tile-actions, .tile-chrome, .tile-top-hit",
+            )
+          ) {
             return;
+          }
           const now = Date.now();
           if (now - lastTap < 350) {
             expandedId = expandedId === cam.id ? null : cam.id;
