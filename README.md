@@ -171,7 +171,7 @@ http://localhost:8080
 | 變數 | 說明 |
 |------|------|
 | `HOMEDVR_PORT` | 主機對外埠，預設 8080 |
-| `ENABLE_WEB_UPDATE` | 網頁一鍵更新（預設 false；需自行掛 docker.sock） |
+| `ENABLE_WEB_UPDATE` | 網頁一鍵更新（預設 **true**；掛 docker.sock + 專案目錄） |
 | `TUNNEL_TOKEN` | 僅 tunnel profile |
 | `PUBLIC_BASE_URL` | 外網網址（文件用） |
 

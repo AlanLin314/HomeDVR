@@ -32,11 +32,11 @@ ENV APP_VERSION=$APP_VERSION \
     PORT=8080 \
     DATABASE_PATH=/data/homedvr.db \
     GO2RTC_URL=http://127.0.0.1:1984 \
-    ENABLE_WEB_UPDATE=false
+    ENABLE_WEB_UPDATE=true
 
 # ffmpeg (for snapshot/jpeg sources), git/curl, ca-certs
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl ffmpeg git wget \
+      bash ca-certificates curl ffmpeg git wget \
   && rm -rf /var/lib/apt/lists/*
 
 # go2rtc binary (linux amd64 / arm64)

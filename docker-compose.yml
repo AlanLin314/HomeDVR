@@ -21,18 +21,19 @@ services:
       DATABASE_PATH: /data/homedvr.db
       GO2RTC_URL: http://127.0.0.1:1984
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
-      ENABLE_WEB_UPDATE: ${ENABLE_WEB_UPDATE:-false}
+      ENABLE_WEB_UPDATE: ${ENABLE_WEB_UPDATE:-true}
       REPO_PATH: /repo
       UPDATE_SCRIPT: /repo/scripts/update.sh
       CHECK_UPDATE_SCRIPT: /repo/scripts/check-update.sh
+      COMPOSE_PROJECT_NAME: homedvr
       APP_VERSION: ${APP_VERSION:-0.1.0}
       GIT_SHA: ${GIT_SHA:-dev}
     volumes:
       - ./data:/data
-      # Only needed if ENABLE_WEB_UPDATE=true
-      - .:/repo:ro
-      # Uncomment if you enable web update:
-      # - /var/run/docker.sock:/var/run/docker.sock
+      # git pull + update script (must be writable, not :ro)
+      - .:/repo
+      # one-click update: rebuild/restart this stack from the web UI
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # Optional: only when using Cloudflare Tunnel
   # docker compose --profile tunnel up -d

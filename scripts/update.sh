@@ -48,6 +48,9 @@ fi
 echo "[update] git pull --ff-only..."
 git pull --ff-only
 
+# Prefer project name from compose file (name: homedvr)
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-homedvr}"
+
 compose() {
   if docker compose version >/dev/null 2>&1; then
     docker compose "$@"
@@ -62,7 +65,7 @@ compose() {
 echo "[update] docker compose build homedvr..."
 compose build homedvr
 
-echo "[update] docker compose up -d..."
+echo "[update] docker compose up -d --remove-orphans..."
 compose up -d --remove-orphans
 
 echo "[update] done at commit $(git rev-parse --short HEAD)"
