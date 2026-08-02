@@ -27,8 +27,13 @@ export async function renderSystemSettings(
     <div class="card glass">
       <h3>更新</h3>
       <p class="muted" style="margin-top:0">
-        僅執行固定腳本 <span class="mono">scripts/update.sh</span>。
-        需 <span class="mono">ENABLE_WEB_UPDATE=true</span>，並掛載 git repo 與 docker.sock。
+        僅執行固定腳本 <span class="mono">scripts/update.sh</span>：
+        <span class="mono">git pull</span> 後由獨立容器
+        <span class="mono">homedvr-updater</span> 做
+        <span class="mono">build + force-recreate</span>
+       （避免更新過程把自己殺死後中斷）。
+        需 <span class="mono">HOMEDVR_HOST_PATH</span>、docker.sock。
+        按下後請等 1～3 分鐘再重新整理頁面。
       </p>
       <div class="row-actions" style="margin:0.85rem 0">
         <button type="button" class="btn btn-block-sm" id="check-btn">檢查更新</button>
