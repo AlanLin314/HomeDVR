@@ -142,25 +142,74 @@ docker compose up -d --build
 
 ---
 
-## 外網（可選第二個容器）
+## 外網：接到 home-net + cloudflared
 
-不開路由器 port。需要時才啟動 tunnel：
+### `XXX:8080` 是什麼？
+
+Cloudflare Tunnel 的 **Public Hostname → Service** 要填「**cloudflared 容器看得到的位址**」：
+
+| 你填的 | 意思 |
+|--------|------|
+| **`http://homedvr:8080`** | 推薦。容器名 `homedvr`，內部聽 **8080**（與 home-net 同網時用） |
+| `http://主機區網IP:8080` | 例如 `http://192.168.88.10:8080`（走主機對外埠） |
+| `http://localhost:8080` | **只有** cloudflared 跟服務在同一網路命名空間時才對；分開容器時通常**不行** |
+
+`8080` = HomeDVR 容器內的網頁埠（不是攝影機 RTSP 埠）。
+
+### 接到既有 `home-net`（與現有 cloudflared 共用）
 
 ```bash
-# .env 填 TUNNEL_TOKEN=...
-docker compose --profile tunnel up -d
+# 1) 若還沒有 home-net，建一次
+docker network create home-net
+
+# 2) 確認你的 cloudflared 已在 home-net
+docker network inspect home-net --format '{{range .Containers}}{{.Name}} {{end}}'
+
+# 3) 啟動 HomeDVR（compose 已加入 home-net）
+cd /root/HomeDVR   # 你的路徑
+git pull
+docker compose up -d --build
+
+# 4) 確認 homedvr 在 home-net 上
+docker network inspect home-net | grep -A2 homedvr
 ```
 
-此時會多一個 **homedvr-tunnel**。  
-Access / Public Hostname 請指向 `http://homedvr:8080`（若 tunnel 與 homedvr 在同一 compose 網路；單一服務名為 `homedvr`）。
+### Cloudflare Dashboard 設定
 
-更簡單：在 Cloudflare Dashboard 把 Tunnel 的 Public Hostname service 設成：
+Zero Trust → **Networks** → **Tunnels** → 你的 tunnel → **Public Hostname** → Add：
+
+| 欄位 | 填什麼 |
+|------|--------|
+| Subdomain | 例如 `cameras` |
+| Domain | 你的網域 |
+| Type | HTTP |
+| **URL** | **`homedvr:8080`** |
+
+完整就是：
 
 ```text
-http://localhost:8080
+http://homedvr:8080
 ```
 
-並讓 cloudflared 與 HomeDVR **跑在同一台主機**（host 網路或指到主機 IP:8080）。
+（Dashboard 有的畫面 Type=HTTP、URL 只填 `homedvr:8080`，不必再寫 `http://`，依 UI 為準。）
+
+然後 Access 保護這個 hostname。
+
+### 若 cloudflared 還不在 home-net
+
+```bash
+# 把現有 cloudflared 容器接上（名稱請改成你的）
+docker network connect home-net <你的cloudflared容器名>
+
+# 或重開它的 compose，networks 加上 home-net
+```
+
+### 本專案自帶 tunnel（通常不必，若你已有共用 cloudflared）
+
+```bash
+# .env 設 TUNNEL_TOKEN=...
+docker compose --profile tunnel up -d
+```
 
 ---
 
