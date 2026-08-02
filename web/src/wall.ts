@@ -195,22 +195,24 @@ export async function renderWall(
       tile.dataset.id = cam.id;
       if (expandedId === cam.id) tile.classList.add("expanded");
 
-      const header = document.createElement("div");
-      header.className = "tile-header";
+      // Permanent chrome (always visible — not hover-only overlay)
+      const chrome = document.createElement("div");
+      chrome.className = "tile-chrome";
+
       const title = document.createElement("span");
       title.className = "tile-title";
       title.textContent = cam.name;
       title.title = cam.name;
-      header.appendChild(title);
+      chrome.appendChild(title);
       if (cam.groupName) {
         const tag = document.createElement("span");
         tag.className = "group-tag";
         tag.textContent = cam.groupName;
-        header.appendChild(tag);
+        chrome.appendChild(tag);
       }
 
       const actions = document.createElement("div");
-      actions.className = "actions";
+      actions.className = "tile-actions";
 
       const edit = document.createElement("button");
       edit.type = "button";
@@ -239,16 +241,11 @@ export async function renderWall(
       });
 
       actions.append(edit, retry, expand);
-      header.appendChild(actions);
-      tile.appendChild(header);
+      chrome.appendChild(actions);
+      tile.appendChild(chrome);
 
       const playerBox = document.createElement("div");
       playerBox.className = "player-host";
-      playerBox.style.flex = "1 1 auto";
-      playerBox.style.minHeight = "0";
-      playerBox.style.width = "100%";
-      playerBox.style.height = "100%";
-      playerBox.style.position = "relative";
       tile.appendChild(playerBox);
 
       // mobile: single tap on tile body expands; desktop: double-click

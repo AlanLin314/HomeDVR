@@ -406,29 +406,100 @@ a:hover {
 
 .tile {
   position: relative;
-  background: #000;
-  min-height: 140px;
+  background: #0c121c;
   overflow: hidden;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  /* Keep player box sized so object-fit:contain can show full frame */
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
-/* Phone single column: 16:9 full-frame friendly, not squashed into viewport */
-.wall[data-cols="1"] .tile {
+/* ── Always-visible toolbar (NOT hover overlay) ── */
+.tile-chrome {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  background: #152033;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  /* Never hide on mobile / non-hover */
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto;
+  z-index: 3;
+}
+
+.tile-chrome .tile-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tile-chrome .group-tag {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.12rem 0.4rem;
+  border-radius: var(--radius-pill);
+  background: rgba(91, 157, 255, 0.18);
+  border: 1px solid rgba(91, 157, 255, 0.35);
+  color: #c5d9ff;
+}
+
+.tile-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.tile-actions button {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+  min-height: 40px;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tile-actions button:active {
+  background: rgba(91, 157, 255, 0.35);
+}
+
+.player-host {
+  flex: 1 1 auto;
+  position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 200px;
-  max-height: min(62dvh, 480px);
-  height: auto;
+  min-height: 160px;
+  background: #000;
 }
 
-.wall[data-cols="2"] .tile {
+/* Phone: one column — size the VIDEO area, chrome stays fixed height */
+.wall[data-cols="1"] .player-host {
+  aspect-ratio: 16 / 9;
+  min-height: 180px;
+  flex: 0 0 auto;
+}
+
+.wall[data-cols="2"] .player-host {
   aspect-ratio: 16 / 10;
   min-height: 120px;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 639px) {
@@ -437,24 +508,21 @@ a:hover {
     padding: 0 8px calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
-  .wall[data-cols="1"] .tile {
-    /* Prefer full camera frame on narrow screens */
-    max-height: none;
-    min-height: 0;
-    /* width-based height: ~16:9 of content width */
-    aspect-ratio: 16 / 9;
+  .tile-chrome {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .tile-actions button {
+    min-height: 44px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.78rem;
   }
 
   .chip-bar {
     position: sticky;
     top: 0;
     z-index: 6;
-    background: linear-gradient(
-      to bottom,
-      rgba(7, 11, 20, 0.92),
-      rgba(7, 11, 20, 0.75),
-      transparent
-    );
+    background: rgba(7, 11, 20, 0.92);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
@@ -467,108 +535,40 @@ a:hover {
   min-height: 100%;
   min-height: 100dvh;
   max-height: none;
-  aspect-ratio: auto !important;
   border-radius: 0;
   border: none;
-  /* Safe areas (notch / home indicator) */
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   box-sizing: border-box;
 }
 
-.tile-header {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.55rem;
-  /* flat bar — no gradient / drop shadow over the video */
-  background: rgba(0, 0, 0, 0.42);
-  font-size: 0.8rem;
-  font-weight: 600;
-  pointer-events: none;
-}
-
-.tile-header .tile-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+.tile.expanded .player-host {
   flex: 1 1 auto;
-}
-
-.tile-header .group-tag {
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: var(--text-secondary);
-}
-
-.tile-header .actions {
-  margin-left: auto;
-  display: flex;
-  gap: 0.3rem;
-  pointer-events: auto;
-}
-
-.tile-header button {
-  pointer-events: auto;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #fff;
-  border-radius: var(--radius-pill);
-  padding: 0.28rem 0.55rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 32px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  font-family: inherit;
+  aspect-ratio: auto !important;
+  min-height: 0;
+  height: 100%;
 }
 
 .player {
   width: 100%;
-  flex: 1 1 auto;
   height: 100%;
   min-height: 0;
-  position: relative;
+  position: absolute;
+  inset: 0;
   background: #000;
 }
 
-.tile > .player,
-.tile > div:last-child {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.tile.expanded .player,
-.tile.expanded > div:last-child {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
+.player-host .player {
+  position: absolute;
+  inset: 0;
 }
 
 .player video {
   width: 100%;
   height: 100%;
-  /* Always show entire camera frame (letterbox if needed) — never crop */
   object-fit: contain;
   object-position: center;
   background: #000;
-}
-
-.tile.expanded .player video {
-  object-fit: contain;
 }
 
 .player-status {
@@ -577,17 +577,26 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
+  padding: 1rem;
+  text-align: center;
+  color: #c5d0e0;
   font-size: 0.9rem;
+  font-weight: 560;
+  background: rgba(0, 0, 0, 0.55);
   pointer-events: none;
-  text-shadow: 0 1px 2px #000;
+  z-index: 1;
 }
 
 .player[data-status="playing"] .player-status {
   display: none;
 }
 
+.player[data-status="connecting"] .player-status {
+  display: flex;
+}
+
 .player[data-status="error"] .player-status {
+  display: flex;
   color: #ffb4bc;
 }
 
