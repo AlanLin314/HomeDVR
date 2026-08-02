@@ -45,8 +45,37 @@ function useTapChrome(): boolean {
   );
 }
 
+/** True on phone / iPad / Android — hardware video decoder slots are scarce. */
+function isConstrainedDevice(): boolean {
+  const ua = navigator.userAgent || "";
+  if (/iPad|iPhone|iPod|Android/i.test(ua)) return true;
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) {
+    return true;
+  }
+  return (
+    window.matchMedia("(hover: none)").matches &&
+    window.matchMedia("(pointer: coarse)").matches
+  );
+}
+
 function viewportWidth(): number {
   return window.innerWidth || document.documentElement.clientWidth || 800;
+}
+
+/**
+ * Max concurrent live streams.
+ * Mobile GPUs / Safari only keep a few hardware decoders alive at once;
+ * starting every tile kills the whole wall.
+ */
+function maxConcurrentStreams(): number {
+  const w = viewportWidth();
+  if (isConstrainedDevice()) {
+    if (w < 640) return 2; // phone: typically 1–2 tiles on screen
+    if (w < 1100) return 4; // iPad portrait / small tablet
+    return 6; // iPad landscape
+  }
+  if (w < 768) return 3;
+  return 12; // desktop / large screens
 }
 
 function loadFilter(): Filter {
@@ -71,10 +100,14 @@ export async function renderWall(
   toast: (m: string, t?: "ok" | "error") => void,
 ): Promise<void> {
   const players = new Map<string, PlayerHandle>();
+  /** Intersection ratio per camera id (0 = off-screen). */
+  const visibility = new Map<string, number>();
+  let streamObserver: IntersectionObserver | null = null;
   let allCameras: Camera[] = [];
   let groups: Group[] = [];
   let filter: Filter = loadFilter();
   let expandedId: string | null = null;
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Icon actions on topbar (refresh / fullscreen / cloudflare) — keep theme toggle first
   const tools =
@@ -148,8 +181,90 @@ export async function renderWall(
   main.appendChild(wrap);
 
   const destroyAll = () => {
+    streamObserver?.disconnect();
+    streamObserver = null;
     for (const p of players.values()) p.destroy();
     players.clear();
+    visibility.clear();
+  };
+
+  /**
+   * Only decode streams that are on-screen (or nearly), up to a device cap.
+   * Off-screen tiles stay idle so phone/iPad GPU decoder slots aren't exhausted.
+   */
+  const reconcileStreams = () => {
+    const max = maxConcurrentStreams();
+    const ranked = [...visibility.entries()]
+      .filter(([, ratio]) => ratio > 0)
+      .sort((a, b) => {
+        // Expanded tile always wins
+        if (a[0] === expandedId) return -1;
+        if (b[0] === expandedId) return 1;
+        return b[1] - a[1];
+      });
+
+    const want = new Set(ranked.slice(0, max).map(([id]) => id));
+
+    for (const [id, handle] of players) {
+      if (want.has(id)) {
+        handle.start();
+      } else {
+        handle.stop();
+      }
+    }
+  };
+
+  const setupStreamObserver = () => {
+    streamObserver?.disconnect();
+    streamObserver = null;
+    visibility.clear();
+
+    if (typeof IntersectionObserver === "undefined") {
+      // Fallback: start up to the cap in paint order
+      let n = 0;
+      const max = maxConcurrentStreams();
+      for (const [id, handle] of players) {
+        if (n < max) {
+          visibility.set(id, 1);
+          handle.start();
+          n += 1;
+        } else {
+          visibility.set(id, 0);
+          handle.stop();
+        }
+      }
+      return;
+    }
+
+    // rootMargin: warm up slightly before fully on-screen
+    streamObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.id;
+          if (!id) continue;
+          // Treat barely-visible as 0 so we free slots when almost off-screen
+          const ratio =
+            entry.isIntersecting && entry.intersectionRatio > 0.05
+              ? entry.intersectionRatio
+              : 0;
+          visibility.set(id, ratio);
+        }
+        reconcileStreams();
+      },
+      {
+        root: null,
+        // Start a bit early when scrolling
+        rootMargin: "80px 0px 80px 0px",
+        threshold: [0, 0.05, 0.15, 0.35, 0.55, 0.75, 1],
+      },
+    );
+
+    for (const tile of wall.querySelectorAll<HTMLElement>(".tile[data-id]")) {
+      const id = tile.dataset.id;
+      if (!id) continue;
+      visibility.set(id, 0);
+      streamObserver.observe(tile);
+    }
   };
 
   const filtered = (): Camera[] => {
@@ -358,13 +473,17 @@ export async function renderWall(
 
       wall.appendChild(tile);
 
+      // Do not auto-start — viewport manager starts only visible tiles
       const handle = createPlayer(playerBox, {
         name: cam.name,
         mse: cam.stream.mse,
         hls: cam.stream.hls,
+        autoStart: false,
       });
       players.set(cam.id, handle);
     }
+
+    setupStreamObserver();
   };
 
   const load = async (showToast = false) => {
@@ -403,7 +522,19 @@ export async function renderWall(
   }
 
   const onResize = () => {
-    paintWall();
+    // Debounce: rebuild grid cols; stream observer reattaches in paintWall
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const cameras = filtered();
+      if (cameras.length === 0) return;
+      const nextCols = String(colsFor(cameras.length, viewportWidth()));
+      if (wall.dataset.cols !== nextCols) {
+        paintWall();
+      } else {
+        // Same grid — only re-evaluate concurrent cap / visibility
+        reconcileStreams();
+      }
+    }, 150);
   };
   window.addEventListener("resize", onResize);
 
@@ -412,6 +543,7 @@ export async function renderWall(
       destroyAll();
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
+      if (resizeTimer) clearTimeout(resizeTimer);
       obs.disconnect();
     }
   });

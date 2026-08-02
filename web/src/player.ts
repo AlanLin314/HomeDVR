@@ -4,13 +4,23 @@
  * iOS/Safari: HLS first (MSE often unreliable).
  */
 
-export type PlayerStatus = "connecting" | "playing" | "error" | "stopped";
+export type PlayerStatus =
+  | "idle"
+  | "connecting"
+  | "playing"
+  | "error"
+  | "stopped";
 
 export interface PlayerHandle {
   el: HTMLElement;
   destroy: () => void;
+  /** Start or restart the stream (no-op if already connecting/playing). */
+  start: () => void;
+  /** Stop decoding/network but keep the tile shell (saves GPU/decoder slots). */
+  stop: () => void;
   retry: () => void;
   getStatus: () => PlayerStatus;
+  isActive: () => boolean;
 }
 
 const CODECS = [
@@ -309,7 +319,13 @@ function startHls(
 
 export function createPlayer(
   container: HTMLElement,
-  opts: { mse: string; hls: string; name: string },
+  opts: {
+    mse: string;
+    hls: string;
+    name: string;
+    /** Default true. Wall sets false and starts only when tile is on-screen. */
+    autoStart?: boolean;
+  },
 ): PlayerHandle {
   // Keep container as .player-host only — do NOT put .player on it
   // (absolute .player on host collapses tile height → no video area)
@@ -327,19 +343,26 @@ export function createPlayer(
 
   const badge = document.createElement("div");
   badge.className = "player-status";
-  badge.textContent = "連線中…";
+  badge.textContent = "待機";
 
   root.append(video, badge);
 
-  let status: PlayerStatus = "connecting";
-  let stop: (() => void) | null = null;
+  let status: PlayerStatus = "idle";
+  let stopStream: (() => void) | null = null;
   let triedMse = false;
   let triedHls = false;
   let fallbackLock = false;
+  let destroyed = false;
 
   const setStatus = (s: PlayerStatus, err?: string) => {
+    if (destroyed) return;
     status = s;
     root.dataset.status = s;
+    if (s === "idle") {
+      badge.hidden = false;
+      badge.textContent = "待機";
+      return;
+    }
     if (s === "connecting") {
       badge.hidden = false;
       badge.textContent = "連線中…";
@@ -358,14 +381,14 @@ export function createPlayer(
       try {
         if (!triedHls) {
           triedHls = true;
-          stop?.();
-          stop = startHls(video, opts.hls, setStatus);
+          stopStream?.();
+          stopStream = startHls(video, opts.hls, setStatus);
           return;
         }
         if (!triedMse && "MediaSource" in window) {
           triedMse = true;
-          stop?.();
-          stop = startMse(video, opts.mse, setStatus);
+          stopStream?.();
+          stopStream = startMse(video, opts.mse, setStatus);
         }
       } finally {
         // allow next error after a tick so nested start can report
@@ -377,30 +400,68 @@ export function createPlayer(
   };
 
   const start = () => {
-    stop?.();
+    if (destroyed) return;
+    // Already connecting / playing — skip re-connect thrash
+    if (status === "connecting" || status === "playing") return;
+    stopStream?.();
+    stopStream = null;
     triedMse = false;
     triedHls = false;
     fallbackLock = false;
     prepVideo(video);
     if (preferHlsFirst()) {
       triedHls = true;
-      stop = startHls(video, opts.hls, setStatus);
+      stopStream = startHls(video, opts.hls, setStatus);
     } else {
       triedMse = true;
-      stop = startMse(video, opts.mse, setStatus);
+      stopStream = startMse(video, opts.mse, setStatus);
     }
   };
 
-  start();
+  const stop = () => {
+    if (destroyed) return;
+    stopStream?.();
+    stopStream = null;
+    triedMse = false;
+    triedHls = false;
+    fallbackLock = false;
+    try {
+      video.pause();
+    } catch {
+      /* ignore */
+    }
+    video.removeAttribute("src");
+    try {
+      video.load();
+    } catch {
+      /* ignore */
+    }
+    setStatus("idle");
+  };
+
+  root.dataset.status = "idle";
+  if (opts.autoStart !== false) {
+    start();
+  } else {
+    setStatus("idle");
+  }
 
   return {
     el: container,
     destroy: () => {
-      stop?.();
+      destroyed = true;
+      stopStream?.();
+      stopStream = null;
       status = "stopped";
       container.innerHTML = "";
     },
-    retry: () => start(),
+    start,
+    stop,
+    retry: () => {
+      stop();
+      start();
+    },
     getStatus: () => status,
+    isActive: () => status === "connecting" || status === "playing",
   };
 }

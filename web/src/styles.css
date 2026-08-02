@@ -844,6 +844,12 @@ a:hover {
   display: none;
 }
 
+.player[data-status="idle"] .player-status {
+  display: flex;
+  opacity: 0.55;
+  font-size: 0.85rem;
+}
+
 .player[data-status="connecting"] .player-status {
   display: flex;
 }
