@@ -140,13 +140,40 @@ a:hover {
   border-radius: var(--radius-lg);
   position: relative;
   z-index: 40;
-  isolation: isolate;
-  /* glass without dark fill — no black bar behind when scrolling */
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  overflow: hidden;
+  /* no fill on the bar itself — underlay blocks scroll colors */
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+/* solid underlay: stops page colors from sliding behind the glass */
+.topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -2;
+  background: #0e1626;
+}
+
+/* liquid glass highlight layer (does not sample scrolling content) */
+.topbar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 42%,
+    rgba(120, 160, 255, 0.08) 100%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 @media (min-width: 769px) {
@@ -281,13 +308,37 @@ a:hover {
   padding: 0.35rem;
   gap: 0.25rem;
   justify-content: space-around;
-  isolation: isolate;
-  /* glass without dark fill */
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  overflow: hidden;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 10px 32px rgba(0, 0, 0, 0.35);
+}
+
+.bottom-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -2;
+  background: #0e1626;
+}
+
+.bottom-nav::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 45%,
+    rgba(120, 160, 255, 0.08) 100%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 @media (min-width: 769px) {
@@ -667,12 +718,10 @@ a:hover {
   }
 
   .chip-bar {
-    position: sticky;
-    top: 0;
+    position: relative;
+    top: auto;
     z-index: 6;
     background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
     border-bottom: none;
     scrollbar-width: none;
   }
