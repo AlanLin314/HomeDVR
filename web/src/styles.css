@@ -31,6 +31,8 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
   --topbar-h: 56px;
+  /* fixed topbar: top offset + bar height */
+  --topbar-offset: calc(0.5rem + var(--safe-top) + 3.85rem);
   --bottom-nav-h: 64px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -487,28 +489,28 @@ a:hover {
   height: 0;
 }
 
-/* Wall: video can sit under glass bars */
+/* Wall: leave room so topbar does not cover chips / first cameras */
 .app-shell.is-wall .page-scroll {
-  padding-top: 0;
+  padding-top: calc(0.35rem + var(--safe-top));
   padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.75rem);
 }
 
 @media (min-width: 769px) {
   .app-shell.is-wall .page-scroll {
-    /* top cameras extend under floating topbar glass */
-    padding-top: 0;
+    /* push content below floating glass topbar */
+    padding-top: var(--topbar-offset);
     padding-bottom: 1rem;
   }
 }
 
 .page-scroll.settings {
-  padding-top: 0.75rem;
+  padding-top: calc(0.75rem + var(--safe-top));
   padding-bottom: calc(2.5rem + var(--bottom-nav-h) + var(--safe-bottom));
 }
 
 @media (min-width: 769px) {
   .page-scroll.settings {
-    padding-top: 5rem; /* clear fixed topbar on form pages */
+    padding-top: var(--topbar-offset);
     padding-bottom: 3rem;
   }
 }
@@ -523,23 +525,19 @@ a:hover {
 }
 
 .wall {
-  /* Do NOT flex-shrink to viewport — let content define height & scroll */
   flex: 0 0 auto;
   display: grid;
   gap: 6px;
-  /* top pad so first row peeks under glass topbar / safe area */
-  padding: calc(0.35rem + var(--safe-top)) 6px 12px;
+  padding: 0 6px 12px;
   min-height: 0;
   height: auto;
   align-content: start;
   grid-auto-rows: auto;
 }
 
-@media (min-width: 769px) {
-  .app-shell.is-wall .wall {
-    /* first camera row extends under floating glass topbar */
-    padding-top: 0.35rem;
-  }
+.chip-bar {
+  /* ensure chips sit fully below topbar (parent already padded) */
+  margin-top: 0;
 }
 
 .wall[data-cols="1"] {
