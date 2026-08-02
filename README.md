@@ -148,73 +148,57 @@ docker compose up -d --build
 
 ---
 
-## 外網：接到 home-net + cloudflared
+## 外網：已有 cloudflared 容器（推薦）
 
-### `XXX:8080` 是什麼？
+HomeDVR **不會**再起一個 cloudflared。  
+它只加入既有的 **`home-net`**，讓你**現有的** cloudflared 連進來。
 
-Cloudflare Tunnel 的 **Public Hostname → Service** 要填「**cloudflared 容器看得到的位址**」：
+```text
+Internet → Cloudflare → [你現有的 cloudflared]
+                              │  home-net
+                              ▼
+                         homedvr:8080
+```
 
-| 你填的 | 意思 |
-|--------|------|
-| **`http://homedvr:8080`** | 推薦。容器名 `homedvr`，內部聽 **8080**（與 home-net 同網時用） |
-| `http://主機區網IP:8080` | 例如 `http://192.168.88.10:8080`（走主機對外埠） |
-| `http://localhost:8080` | **只有** cloudflared 跟服務在同一網路命名空間時才對；分開容器時通常**不行** |
-
-`8080` = HomeDVR 容器內的網頁埠（不是攝影機 RTSP 埠）。
-
-### 接到既有 `home-net`（與現有 cloudflared 共用）
+### 指令
 
 ```bash
-# 1) 若還沒有 home-net，建一次
-docker network create home-net
-
-# 2) 確認你的 cloudflared 已在 home-net
+# 1) 確認 home-net + cloudflared 在上面
 docker network inspect home-net --format '{{range .Containers}}{{.Name}} {{end}}'
+# 若 cloudflared 不在：
+# docker network connect home-net <你的cloudflared容器名>
 
-# 3) 啟動 HomeDVR（compose 已加入 home-net）
-cd /root/HomeDVR   # 你的路徑
+# 2) 啟動 HomeDVR
+cd /root/HomeDVR
 git pull
 docker compose up -d --build
 
-# 4) 確認 homedvr 在 home-net 上
-docker network inspect home-net | grep -A2 homedvr
+# 3) 確認 homedvr 也在 home-net
+docker network inspect home-net --format '{{range .Containers}}{{.Name}} {{end}}'
 ```
 
-### Cloudflare Dashboard 設定
+### Cloudflare Dashboard（你現有的 Tunnel）
 
-Zero Trust → **Networks** → **Tunnels** → 你的 tunnel → **Public Hostname** → Add：
+Public Hostname → Service：
 
-| 欄位 | 填什麼 |
-|------|--------|
-| Subdomain | 例如 `cameras` |
-| Domain | 你的網域 |
+| 欄位 | 值 |
+|------|-----|
 | Type | HTTP |
-| **URL** | **`homedvr:8080`** |
-
-完整就是：
+| URL | **`homedvr:8080`** |
 
 ```text
 http://homedvr:8080
 ```
 
-（Dashboard 有的畫面 Type=HTTP、URL 只填 `homedvr:8080`，不必再寫 `http://`，依 UI 為準。）
+- **不要**填 `localhost:8080`（cloudflared 在別的容器時 localhost ≠ HomeDVR）
+- 再用 Access 擋未授權
 
-然後 Access 保護這個 hostname。
-
-### 若 cloudflared 還不在 home-net
-
-```bash
-# 把現有 cloudflared 容器接上（名稱請改成你的）
-docker network connect home-net <你的cloudflared容器名>
-
-# 或重開它的 compose，networks 加上 home-net
-```
-
-### 本專案自帶 tunnel（通常不必，若你已有共用 cloudflared）
+### 測試
 
 ```bash
-# .env 設 TUNNEL_TOKEN=...
-docker compose --profile tunnel up -d
+docker exec <cloudflared容器名> wget -qO- http://homedvr:8080/api/health
+# 或
+docker exec <cloudflared容器名> curl -s http://homedvr:8080/api/health
 ```
 
 ---
