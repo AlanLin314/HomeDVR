@@ -243,8 +243,12 @@ export async function renderWall(
       tile.appendChild(header);
 
       const playerBox = document.createElement("div");
+      playerBox.className = "player-host";
+      playerBox.style.flex = "1 1 auto";
+      playerBox.style.minHeight = "0";
       playerBox.style.width = "100%";
       playerBox.style.height = "100%";
+      playerBox.style.position = "relative";
       tile.appendChild(playerBox);
 
       // mobile: single tap on tile body expands; desktop: double-click
