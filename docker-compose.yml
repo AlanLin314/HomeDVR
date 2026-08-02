@@ -1,6 +1,10 @@
-# HomeDVR — single container; joins home-net for shared cloudflared
+# HomeDVR — single container
+# Joins external network "home-net" so your EXISTING cloudflared can reach it.
 #
-# HOMEDVR_HOST_PATH = absolute path on the DOCKER HOST (e.g. /root/HomeDVR).
+# Cloudflare Dashboard Public Hostname service URL:
+#   http://homedvr:8080
+#
+# Do NOT start a second cloudflared here if you already have one on home-net.
 name: homedvr
 
 services:
@@ -15,12 +19,14 @@ services:
     container_name: homedvr
     restart: unless-stopped
     ports:
+      # LAN: http://主機IP:8080
       - "${HOMEDVR_PORT:-8080}:8080"
     environment:
       NODE_ENV: production
       PORT: "8080"
       DATABASE_PATH: /data/homedvr.db
       GO2RTC_URL: http://127.0.0.1:1984
+      # Used by UI cloud icon (your public hostname)
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       ENABLE_WEB_UPDATE: ${ENABLE_WEB_UPDATE:-true}
       REPO_PATH: /repo
@@ -38,26 +44,10 @@ services:
       - default
       - home-net
 
-  # Built-in tunnel (optional). Prefer shared cloudflared on home-net if you already have one.
-  # Start with:  docker compose --profile tunnel up -d
-  # Or set in .env:  COMPOSE_PROFILES=tunnel
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: homedvr-tunnel
-    restart: unless-stopped
-    profiles:
-      - tunnel
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env for tunnel profile}
-    depends_on:
-      - homedvr
-    networks:
-      - home-net
-
 networks:
   default:
     name: homedvr_default
+  # Must already exist: docker network create home-net
   home-net:
     external: true
     name: home-net
