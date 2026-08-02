@@ -42,9 +42,9 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
       <h1>HomeDVR</h1>
     </div>
     <nav class="desktop-nav">
-      <a class="btn ${active === "wall" ? "active" : ""}" href="#/">多畫面牆</a>
-      <a class="btn ${active === "cameras" ? "active" : ""}" href="#/settings">攝影機</a>
-      <a class="btn ${active === "system" ? "active" : ""}" href="#/settings/system">系統</a>
+      <a class="nav-link ${active === "wall" ? "active" : ""}" href="#/">多畫面牆</a>
+      <a class="nav-link ${active === "cameras" ? "active" : ""}" href="#/settings">攝影機</a>
+      <a class="nav-link ${active === "system" ? "active" : ""}" href="#/settings/system">系統</a>
     </nav>
   `;
   root.appendChild(bar);
@@ -62,15 +62,15 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
   bottom.className = "bottom-nav glass-elevated";
   bottom.setAttribute("aria-label", "主導覽");
   bottom.innerHTML = `
-    <a href="#/" class="${active === "wall" ? "active" : ""}">
+    <a href="#/" class="nav-link ${active === "wall" ? "active" : ""}">
       <span class="ico">▦</span>
       <span>畫面牆</span>
     </a>
-    <a href="#/settings" class="${active === "cameras" ? "active" : ""}">
+    <a href="#/settings" class="nav-link ${active === "cameras" ? "active" : ""}">
       <span class="ico">📷</span>
       <span>攝影機</span>
     </a>
-    <a href="#/settings/system" class="${active === "system" ? "active" : ""}">
+    <a href="#/settings/system" class="nav-link ${active === "system" ? "active" : ""}">
       <span class="ico">⚙️</span>
       <span>系統</span>
     </a>

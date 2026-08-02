@@ -179,34 +179,42 @@ a:hover {
   align-items: center;
 }
 
-/* Navbar: only the active item is pill-shaped */
-.topbar nav .btn,
-.desktop-nav .btn {
-  border-radius: 8px;
-  border-color: transparent;
+/* Navbar links: plain text until selected — then pill only */
+.nav-link {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.45rem 0.85rem;
+  min-height: 40px;
+  border: none;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  font-weight: 560;
   color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 560;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-radius 0.15s;
 }
 
-.topbar nav .btn:hover,
-.desktop-nav .btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: transparent;
+.nav-link:hover {
   color: var(--text);
+  background: transparent;
+  text-decoration: none;
 }
 
-.topbar nav .btn.active,
-.desktop-nav .btn.active {
+/* Only the current page gets the pill */
+.nav-link.active {
   border-radius: var(--radius-pill);
-  border-color: rgba(91, 157, 255, 0.55);
-  background: rgba(91, 157, 255, 0.2);
+  background: rgba(91, 157, 255, 0.22);
   color: var(--text);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
   font-weight: 650;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* Mobile bottom tab bar */
@@ -229,40 +237,35 @@ a:hover {
   }
 }
 
-.bottom-nav a {
+.bottom-nav .nav-link {
   flex: 1;
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 0.15rem;
-  padding: 0.45rem 0.25rem;
-  border-radius: 10px;
-  color: var(--text-secondary);
-  text-decoration: none;
+  padding: 0.45rem 0.35rem;
+  min-height: 48px;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  transition: background 0.2s, color 0.2s, border-radius 0.2s;
-  min-height: 48px;
+  border-radius: 0;
   background: transparent;
+  box-shadow: none;
 }
 
-.bottom-nav a .ico {
+.bottom-nav .nav-link .ico {
   font-size: 1.15rem;
   line-height: 1;
 }
 
-.bottom-nav a.active {
+.bottom-nav .nav-link:hover {
   color: var(--text);
-  background: var(--glass-bg-strong);
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  background: transparent;
 }
 
-.bottom-nav a:hover {
-  text-decoration: none;
+.bottom-nav .nav-link.active {
+  border-radius: var(--radius-pill);
+  background: rgba(91, 157, 255, 0.22);
   color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* ── Buttons ─────────────────────────────────────────── */
@@ -506,8 +509,8 @@ a:hover {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.22);
   color: #fff;
-  border-radius: 8px;
-  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.7rem;
   font-size: 0.75rem;
   font-weight: 650;
   cursor: pointer;
