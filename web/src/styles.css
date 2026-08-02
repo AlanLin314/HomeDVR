@@ -1,7 +1,12 @@
-:root {
+:root,
+[data-theme="dark"] {
   color-scheme: dark;
   --bg0: #05070d;
   --bg1: #0b1220;
+  --bg-body-1: rgba(91, 157, 255, 0.28);
+  --bg-body-2: rgba(124, 107, 255, 0.22);
+  --bg-body-3: rgba(79, 209, 197, 0.12);
+  --bg-body-base: linear-gradient(165deg, #070b14 0%, #0a1020 45%, #05070d 100%);
   --text: #f2f6ff;
   --text-secondary: rgba(242, 246, 255, 0.72);
   --muted: rgba(242, 246, 255, 0.48);
@@ -22,6 +27,21 @@
   --glass-blur: 28px;
   --glass-saturate: 160%;
 
+  --nav-glass: rgba(18, 28, 48, 0.38);
+  --nav-border: rgba(255, 255, 255, 0.22);
+  --nav-inset: rgba(255, 255, 255, 0.3);
+  --nav-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+
+  --card-bg: rgba(0, 0, 0, 0.18);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --table-border: rgba(255, 255, 255, 0.1);
+  --input-bg: rgba(0, 0, 0, 0.28);
+  --tile-border: rgba(255, 255, 255, 0.1);
+  --tile-chrome-bg: rgba(12, 18, 28, 0.88);
+  --brand-title: #fff;
+  --log-bg: rgba(0, 0, 0, 0.35);
+  --toast-bg: #1e293b;
+
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 22px;
@@ -31,19 +51,72 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
   --topbar-h: 56px;
-  /* fixed topbar: top offset + bar height */
   --topbar-offset: calc(0.5rem + var(--safe-top) + 3.85rem);
   --bottom-nav-h: 64px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
 }
 
+/* ── Day / light theme ───────────────────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg0: #e8eef6;
+  --bg1: #f4f7fb;
+  --bg-body-1: rgba(91, 157, 255, 0.18);
+  --bg-body-2: rgba(124, 107, 255, 0.12);
+  --bg-body-3: rgba(79, 209, 197, 0.1);
+  --bg-body-base: linear-gradient(165deg, #f0f4fa 0%, #e4ebf5 50%, #dfe8f4 100%);
+  --text: #0f172a;
+  --text-secondary: rgba(15, 23, 42, 0.72);
+  --muted: rgba(15, 23, 42, 0.48);
+  --accent: #2563eb;
+  --accent-2: #6366f1;
+  --accent-grad: linear-gradient(135deg, #3b82f6 0%, #6366f1 55%, #14b8a6 100%);
+  --danger: #e11d48;
+  --ok: #16a34a;
+  --warn: #d97706;
+
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.72);
+  --glass-bg-strong: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(15, 23, 42, 0.1);
+  --glass-border-strong: rgba(15, 23, 42, 0.16);
+  --glass-highlight: rgba(255, 255, 255, 0.85);
+  --glass-shadow: 0 8px 28px rgba(15, 23, 42, 0.1);
+  --glass-blur: 24px;
+  --glass-saturate: 140%;
+
+  --nav-glass: rgba(255, 255, 255, 0.55);
+  --nav-border: rgba(15, 23, 42, 0.12);
+  --nav-inset: rgba(255, 255, 255, 0.9);
+  --nav-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+
+  --card-bg: rgba(255, 255, 255, 0.72);
+  --card-border: rgba(15, 23, 42, 0.08);
+  --table-border: rgba(15, 23, 42, 0.1);
+  --input-bg: rgba(255, 255, 255, 0.9);
+  --tile-border: rgba(15, 23, 42, 0.1);
+  --tile-chrome-bg: rgba(255, 255, 255, 0.88);
+  --brand-title: #0f172a;
+  --log-bg: rgba(15, 23, 42, 0.06);
+  --toast-bg: #ffffff;
+}
+
 @media (prefers-reduced-transparency: reduce) {
-  :root {
+  :root,
+  [data-theme="dark"] {
     --glass-bg: rgba(22, 28, 42, 0.94);
     --glass-bg-elevated: rgba(28, 36, 54, 0.96);
     --glass-bg-strong: rgba(36, 46, 68, 0.98);
     --glass-blur: 0px;
+    --nav-glass: rgba(16, 24, 40, 0.96);
+  }
+  [data-theme="light"] {
+    --glass-bg: rgba(255, 255, 255, 0.96);
+    --glass-bg-elevated: rgba(255, 255, 255, 0.98);
+    --glass-bg-strong: #fff;
+    --glass-blur: 0px;
+    --nav-glass: rgba(255, 255, 255, 0.96);
   }
 }
 
@@ -68,10 +141,10 @@ body {
   min-height: 100dvh;
   max-height: 100dvh;
   background:
-    radial-gradient(1200px 700px at 10% -10%, rgba(91, 157, 255, 0.28), transparent 55%),
-    radial-gradient(900px 600px at 100% 0%, rgba(124, 107, 255, 0.22), transparent 50%),
-    radial-gradient(800px 500px at 50% 110%, rgba(79, 209, 197, 0.12), transparent 55%),
-    linear-gradient(165deg, #070b14 0%, #0a1020 45%, #05070d 100%);
+    radial-gradient(1200px 700px at 10% -10%, var(--bg-body-1), transparent 55%),
+    radial-gradient(900px 600px at 100% 0%, var(--bg-body-2), transparent 50%),
+    radial-gradient(800px 500px at 50% 110%, var(--bg-body-3), transparent 55%),
+    var(--bg-body-base);
   background-attachment: fixed;
 }
 
@@ -138,11 +211,11 @@ a:hover {
   padding: 0.55rem 0.85rem;
   border-radius: var(--radius-lg);
   /* semi-transparent so camera video shows through */
-  background: rgba(18, 28, 48, 0.38);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--nav-glass);
+  border: 1px solid var(--nav-border);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 8px 32px rgba(0, 0, 0, 0.25);
+    inset 0 1px 0 var(--nav-inset),
+    var(--nav-shadow);
   backdrop-filter: blur(22px) saturate(180%);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
 }
@@ -158,7 +231,7 @@ a:hover {
   font-size: 1.05rem;
   font-weight: 650;
   letter-spacing: 0.01em;
-  color: #fff;
+  color: var(--brand-title);
 }
 
 .topbar .brand {
@@ -280,11 +353,11 @@ a:hover {
   gap: 0.25rem;
   justify-content: space-around;
   /* floats over video — real frost glass */
-  background: rgba(18, 28, 48, 0.38);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--nav-glass);
+  border: 1px solid var(--nav-border);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 10px 32px rgba(0, 0, 0, 0.3);
+    inset 0 1px 0 var(--nav-inset),
+    var(--nav-shadow);
   backdrop-filter: blur(22px) saturate(180%);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
 }
@@ -324,6 +397,13 @@ a:hover {
   background: rgba(91, 157, 255, 0.22);
   color: var(--text);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.bottom-nav .theme-nav-btn {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  background: transparent;
 }
 
 /* ── Buttons ─────────────────────────────────────────── */
@@ -553,8 +633,8 @@ a:hover {
   background: #0c121c;
   overflow: hidden;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--tile-border);
+  box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -582,8 +662,8 @@ a:hover {
   align-items: center;
   gap: 0.4rem;
   padding: 0.45rem 0.55rem;
-  background: rgba(12, 18, 28, 0.88);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tile-chrome-bg);
+  border-bottom: 1px solid var(--glass-border);
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text);
@@ -887,7 +967,7 @@ input[type="url"],
 input[type="password"],
 textarea,
 select {
-  background: rgba(0, 0, 0, 0.28);
+  background: var(--input-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   color: var(--text);
@@ -955,7 +1035,7 @@ select:focus {
 .table-desktop td {
   text-align: left;
   padding: 0.75rem 0.65rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--table-border);
   vertical-align: middle;
   overflow: hidden;
 }
@@ -966,7 +1046,7 @@ select:focus {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid var(--table-border);
 }
 
 /* fixed columns so borders line up */
@@ -1022,8 +1102,8 @@ select:focus {
 .item-card {
   border-radius: var(--radius-md);
   padding: 0.85rem 0.95rem;
-  background: rgba(0, 0, 0, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
 }
 
 .item-card .title-row {
@@ -1104,6 +1184,10 @@ select:focus {
   font-weight: 560;
   text-align: center;
   animation: toast-in 0.25s ease;
+  background: var(--toast-bg);
+  color: var(--text);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
 }
 
 @media (min-width: 769px) {
@@ -1150,7 +1234,7 @@ select:focus {
 }
 
 .log-box {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--log-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   padding: 0.85rem;

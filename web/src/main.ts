@@ -7,8 +7,10 @@ import {
   migrateHashRoute,
   parseRoute,
 } from "./router";
+import { getTheme, initTheme, toggleTheme } from "./theme";
 
 const app = document.getElementById("app")!;
+initTheme();
 
 function toast(msg: string, type: "ok" | "error" = "ok") {
   document.querySelectorAll(".toast").forEach((el) => el.remove());
@@ -51,12 +53,36 @@ function shell(active: NavKey): {
       <h1>HomeDVR</h1>
     </div>
     <nav class="desktop-nav">
+      <div class="nav-tools" id="nav-tools-slot"></div>
       <a class="nav-link ${active === "wall" ? "active" : ""}" href="/">主畫面</a>
       <a class="nav-link ${active === "cameras" ? "active" : ""}" href="/cameras">攝影機</a>
       <a class="nav-link ${active === "system" ? "active" : ""}" href="/system">系統</a>
     </nav>
   `;
   root.appendChild(bar);
+
+  // Theme toggle (all pages)
+  const toolsSlot = bar.querySelector("#nav-tools-slot") as HTMLElement | null;
+  if (toolsSlot) {
+    const themeBtn = document.createElement("button");
+    themeBtn.type = "button";
+    themeBtn.className = "icon-btn";
+    const syncThemeIcon = () => {
+      const light = getTheme() === "light";
+      themeBtn.title = light ? "切換夜間模式" : "切換日間模式";
+      themeBtn.setAttribute("aria-label", themeBtn.title);
+      themeBtn.innerHTML = light
+        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
+        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+    };
+    syncThemeIcon();
+    themeBtn.addEventListener("click", () => {
+      toggleTheme();
+      syncThemeIcon();
+      toast(getTheme() === "light" ? "日間模式" : "夜間模式", "ok");
+    });
+    toolsSlot.appendChild(themeBtn);
+  }
 
   // Floating glass bottom nav (mobile)
   const bottom = document.createElement("nav");
@@ -75,8 +101,27 @@ function shell(active: NavKey): {
       <span class="ico">⚙️</span>
       <span>系統</span>
     </a>
+    <button type="button" class="nav-link theme-nav-btn" id="theme-nav-btn" aria-label="切換主題">
+      <span class="ico" id="theme-nav-ico">☀</span>
+      <span id="theme-nav-label">日間</span>
+    </button>
   `;
   root.appendChild(bottom);
+
+  const themeNavBtn = bottom.querySelector("#theme-nav-btn") as HTMLButtonElement | null;
+  const themeNavIco = bottom.querySelector("#theme-nav-ico") as HTMLElement | null;
+  const themeNavLabel = bottom.querySelector("#theme-nav-label") as HTMLElement | null;
+  const syncMobileTheme = () => {
+    const light = getTheme() === "light";
+    if (themeNavIco) themeNavIco.textContent = light ? "☾" : "☀";
+    if (themeNavLabel) themeNavLabel.textContent = light ? "夜間" : "日間";
+  };
+  syncMobileTheme();
+  themeNavBtn?.addEventListener("click", () => {
+    toggleTheme();
+    syncMobileTheme();
+    toast(getTheme() === "light" ? "日間模式" : "夜間模式", "ok");
+  });
 
   return { root, main, scroll };
 }
