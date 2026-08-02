@@ -329,7 +329,6 @@ function groupCardHtml(g: Group): string {
         <strong>${escapeHtml(g.name)}</strong>
         <span class="badge group">${g.cameraCount} 台</span>
       </div>
-      <div class="meta mono truncate-url" title="${escapeAttr(g.id)}">${escapeHtml(g.id)}</div>
       <div class="row-actions">
         <button type="button" class="btn btn-sm" data-gaction="rename" data-id="${escapeAttr(g.id)}">重新命名</button>
         <button type="button" class="btn btn-sm btn-danger" data-gaction="delete" data-id="${escapeAttr(g.id)}">刪除</button>
@@ -341,7 +340,7 @@ function groupCardHtml(g: Group): string {
 function groupRowHtml(g: Group): string {
   return `
     <tr>
-      <td><strong>${escapeHtml(g.name)}</strong><div class="mono muted truncate-url" title="${escapeAttr(g.id)}">${escapeHtml(g.id)}</div></td>
+      <td><strong>${escapeHtml(g.name)}</strong></td>
       <td>${g.cameraCount}</td>
       <td>
         <div class="row-actions">
@@ -369,7 +368,7 @@ function camCardHtml(c: Camera): string {
       </div>
       <div class="meta">
         <span class="badge group">${escapeHtml(c.groupName || "未分組")}</span>
-        <div class="mono truncate-url" style="margin-top:0.35rem" title="${escapeAttr(c.sourceMasked)}">${escapeHtml(c.sourceMasked)}</div>
+        <div class="url-clip" title="${escapeAttr(c.sourceMasked)}">${escapeHtml(c.sourceMasked)}</div>
       </div>
       <div class="row-actions">
         <button type="button" class="btn btn-sm" data-action="edit" data-id="${escapeAttr(c.id)}">編輯</button>
@@ -384,11 +383,11 @@ function camCardHtml(c: Camera): string {
 function camRowHtml(c: Camera): string {
   return `
     <tr>
-      <td><strong>${escapeHtml(c.name)}</strong><div class="mono muted truncate-url" title="${escapeAttr(c.id)}">${escapeHtml(c.id)}</div></td>
-      <td><span class="badge group">${escapeHtml(c.groupName || "未分組")}</span></td>
-      <td>${statusBadge(c)}</td>
-      <td class="mono truncate-url" title="${escapeAttr(c.sourceMasked)}">${escapeHtml(c.sourceMasked)}</td>
-      <td>
+      <td class="col-name"><strong>${escapeHtml(c.name)}</strong></td>
+      <td class="col-group"><span class="badge group">${escapeHtml(c.groupName || "未分組")}</span></td>
+      <td class="col-status">${statusBadge(c)}</td>
+      <td class="col-source" title="${escapeAttr(c.sourceMasked)}"><span class="url-clip">${escapeHtml(c.sourceMasked)}</span></td>
+      <td class="col-actions">
         <div class="row-actions">
           <button type="button" class="btn btn-sm" data-action="edit" data-id="${escapeAttr(c.id)}">編輯</button>
           <button type="button" class="btn btn-sm" data-action="toggle" data-id="${escapeAttr(c.id)}">${c.enabled ? "停用" : "啟用"}</button>

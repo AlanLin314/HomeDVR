@@ -948,7 +948,9 @@ select:focus {
 .table-desktop {
   display: none;
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
+  border-spacing: 0;
   font-size: 0.9rem;
 }
 
@@ -961,9 +963,10 @@ select:focus {
 .table-desktop th,
 .table-desktop td {
   text-align: left;
-  padding: 0.7rem 0.45rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  vertical-align: top;
+  padding: 0.75rem 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  vertical-align: middle;
+  overflow: hidden;
 }
 
 .table-desktop th {
@@ -972,6 +975,44 @@ select:focus {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* fixed columns so borders line up */
+.table-desktop .col-name,
+.table-desktop th:nth-child(1) {
+  width: 16%;
+}
+.table-desktop .col-group,
+.table-desktop th:nth-child(2) {
+  width: 12%;
+}
+.table-desktop .col-status,
+.table-desktop th:nth-child(3) {
+  width: 10%;
+}
+.table-desktop .col-source,
+.table-desktop th:nth-child(4) {
+  width: 32%;
+}
+.table-desktop .col-actions,
+.table-desktop th:nth-child(5) {
+  width: 30%;
+}
+
+.table-desktop .col-actions .row-actions {
+  flex-wrap: nowrap;
+}
+
+.url-clip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  max-width: 100%;
 }
 
 /* Mobile cards list */
@@ -1049,28 +1090,14 @@ select:focus {
 .mono {
   font-family: var(--mono);
   font-size: 0.78rem;
+}
+
+/* long URLs — single line clip (do NOT set display:block on table cells) */
+.truncate-url {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  word-break: normal;
   max-width: 100%;
-  display: block;
-}
-
-/* long RTSP / http URLs — single line clip */
-.truncate-url,
-td.mono,
-.item-card .meta .mono {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  word-break: normal;
-  max-width: 100%;
-  display: block;
-}
-
-.table-desktop td.mono {
-  max-width: 220px;
 }
 
 .toast {
