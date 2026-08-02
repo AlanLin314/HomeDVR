@@ -1,0 +1,13 @@
+# Streams are managed dynamically by HomeDVR API (SQLite → go2rtc).
+# Do not put camera RTSP credentials here for normal use.
+
+api:
+  listen: ":1984"
+  origin: "*"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  # LAN WebRTC only; external access uses MSE/HLS via Cloudflare Tunnel
+  listen: ":8555"

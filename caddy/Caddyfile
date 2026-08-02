@@ -1,0 +1,24 @@
+:8080 {
+	encode gzip
+
+	# HomeDVR control API + static UI
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# go2rtc streams (MSE WebSocket, HLS, etc.) — same origin for Access
+	handle /go2rtc/* {
+		uri strip_prefix /go2rtc
+		reverse_proxy go2rtc:1984
+	}
+
+	# SPA + static assets
+	handle {
+		reverse_proxy api:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

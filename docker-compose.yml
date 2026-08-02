@@ -1,0 +1,69 @@
+services:
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    restart: unless-stopped
+    volumes:
+      - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
+    # No public ports — only reachable via Caddy on the compose network
+    networks:
+      - homedvr
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-0.1.0}
+        GIT_SHA: ${GIT_SHA:-dev}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_PATH: /data/homedvr.db
+      GO2RTC_URL: http://go2rtc:1984
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      ENABLE_WEB_UPDATE: ${ENABLE_WEB_UPDATE:-true}
+      REPO_PATH: /repo
+      UPDATE_SCRIPT: /repo/scripts/update.sh
+      CHECK_UPDATE_SCRIPT: /repo/scripts/check-update.sh
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      GIT_SHA: ${GIT_SHA:-dev}
+    volumes:
+      - ./data:/data
+      # Web update: mount repo + docker socket (see README security notes)
+      - .:/repo
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - go2rtc
+    networks:
+      - homedvr
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - go2rtc
+    networks:
+      - homedvr
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles:
+      - tunnel
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - caddy
+    networks:
+      - homedvr
+
+networks:
+  homedvr:
+    driver: bridge
