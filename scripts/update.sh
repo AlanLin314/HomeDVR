@@ -73,22 +73,23 @@ if [[ "$LOCAL" != "$REMOTE" ]]; then
   echo "[update] git pull --ff-only..."
   git pull --ff-only
 else
-  echo "[update] code already up to date — still rebuilding/recreating container"
+  echo "[update] code already up to date — still rebuild + restart same container"
 fi
 
 NEW_SHA="$(git rev-parse --short HEAD)"
 echo "[update] code at $NEW_SHA"
 
-UPDATER_IMAGE="${HOMEDVR_UPDATER_IMAGE:-docker:27-cli}"
-echo "[update] ensuring updater image: $UPDATER_IMAGE"
-docker pull "$UPDATER_IMAGE" >/dev/null 2>&1 || true
+# Why a short-lived helper?
+# App code is baked into the image. After git pull we must rebuild the image
+# and restart the SAME container (name=homedvr). That cannot run inside the
+# container being replaced — so a temporary helper does: build → up -d.
+# data/ stays on the host bind mount; we do NOT create a second DVR.
 
-# Remove previous helper if any
+UPDATER_IMAGE="${HOMEDVR_UPDATER_IMAGE:-docker:27-cli}"
+docker pull "$UPDATER_IMAGE" >/dev/null 2>&1 || true
 docker rm -f homedvr-updater 2>/dev/null || true
 
-# Helper runs on the Docker HOST (not inside the container we will recreate).
-# Detached so this script can exit cleanly; recreate happens in ~2s.
-echo "[update] starting detached updater for build + force-recreate..."
+echo "[update] queue rebuild + restart of container 'homedvr' (same name, same data)..."
 docker run -d \
   --name homedvr-updater \
   --restart "no" \
@@ -102,31 +103,24 @@ docker run -d \
   "$UPDATER_IMAGE" \
   sh -c '
     set -eux
-    echo "[updater] host=$(pwd) HOMEDVR_HOST_PATH=$HOMEDVR_HOST_PATH"
     sleep 2
     export HOMEDVR_HOST_PATH COMPOSE_PROJECT_NAME GIT_SHA APP_VERSION
-    docker compose version
+    # Rebuild image, then restart the same service (compose replaces container if image changed)
     docker compose --project-name "$COMPOSE_PROJECT_NAME" build \
       --build-arg "GIT_SHA=${GIT_SHA}" \
       --build-arg "APP_VERSION=${APP_VERSION:-0.1.0}" \
       homedvr
-    echo "[updater] recreate homedvr..."
     docker compose --project-name "$COMPOSE_PROJECT_NAME" up -d \
-      --force-recreate \
+      --build \
       --remove-orphans \
       --no-deps \
+      --force-recreate \
       homedvr
-    echo "[updater] verify"
-    docker ps --filter name=^homedvr$ --format "{{.Names}} {{.Status}} {{.Image}}"
-    docker inspect homedvr --format "data={{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Source}}{{end}}{{end}}"
-    echo "[updater] done"
-    # self-remove when finished (best effort)
+    docker ps --filter name=^homedvr$ --format "{{.Names}} {{.Status}}"
     docker rm -f homedvr-updater >/dev/null 2>&1 || true
   '
 
-echo "[update] updater container started (homedvr-updater)"
-echo "[update] it will: sleep 2s → build → force-recreate homedvr"
-echo "[update] this API process will stop during recreate — that is expected"
-echo "[update] refresh the page in 1–3 minutes"
-echo "[update] queued at commit $NEW_SHA"
+echo "[update] done queueing — same container name, data kept"
+echo "[update] refresh page in 1–3 minutes"
+echo "[update] commit $NEW_SHA"
 exit 0

@@ -57,7 +57,7 @@ export async function renderSystemSettings(
       <h3>更新</h3>
       <div class="row-actions" style="margin:0.5rem 0 0.85rem">
         <button type="button" class="btn btn-block-sm" id="check-btn">檢查更新</button>
-        <button type="button" class="btn btn-primary btn-block-sm" id="update-btn" disabled>一鍵更新</button>
+        <button type="button" class="btn btn-primary btn-block-sm" id="update-btn" disabled>更新並重啟</button>
       </div>
       <div id="check-result" class="muted"></div>
       <h3 style="margin-top:1rem">日誌</h3>
@@ -122,8 +122,8 @@ export async function renderSystemSettings(
       enableWebUpdate = v.enableWebUpdate;
       verLine.textContent = `${v.version}  ·  ${v.gitSha}`;
       updateFlag.textContent = enableWebUpdate
-        ? "一鍵更新：已啟用"
-        : "一鍵更新：已停用";
+        ? "更新並重啟：已啟用"
+        : "更新並重啟：已停用";
       checkBtn.disabled = !enableWebUpdate;
       updateBtn.disabled = !enableWebUpdate;
       paintLog(v.update);
@@ -202,7 +202,7 @@ export async function renderSystemSettings(
 
   updateBtn.addEventListener("click", async () => {
     const ok = confirm(
-      "確定更新？將 git pull 並重建容器，約 1～數分鐘。data 不會刪除。",
+      "確定更新並重啟？\n會拉取最新程式、重建映像並重啟同一個 homedvr 容器。\n資料夾 data 會保留，約 1～數分鐘。",
     );
     if (!ok) return;
     updateBtn.disabled = true;

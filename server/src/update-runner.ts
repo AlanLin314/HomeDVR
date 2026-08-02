@@ -131,7 +131,7 @@ export async function startUpdate(): Promise<UpdateJobState> {
       state.finishedAt = new Date().toISOString();
       if (code === 0) {
         state.status = "success";
-        appendLog("[homedvr] update queued — refresh in 1–3 min");
+        appendLog("[homedvr] 已排程：重建映像並重啟同一個容器，請 1～3 分鐘後重新整理");
       } else {
         state.status = "failed";
         state.error = `update script exited with code ${code}`;
