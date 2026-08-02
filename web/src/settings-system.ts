@@ -29,9 +29,8 @@ export async function renderSystemSettings(
     <div class="card glass">
       <h3>外網存取</h3>
       <p class="muted" style="margin-top:0">
-        使用已有的 cloudflared 時，Tunnel 服務請填
-        <span class="mono">http://homedvr:8080</span>。
-        下方網址會顯示在頂部雲圖示，並寫入 <span class="mono">.env</span>。
+        給 Cloudflare Tunnel / 同事看的設定。儲存後寫入資料庫與
+        <span class="mono">.env</span>，不必進 Docker 終端改。
       </p>
       <form class="form-grid" id="remote-form" style="margin-top:0.85rem">
         <label>
@@ -39,10 +38,16 @@ export async function renderSystemSettings(
           <input type="url" id="public-url" placeholder="https://dvr.flaremetal.com" autocomplete="off" />
         </label>
         <label>
+          Tunnel 服務位址（填到 Cloudflare Public Hostname → URL）
+          <div class="input-with-btn">
+            <input type="text" id="tunnel-service" placeholder="http://homedvr:8080" autocomplete="off" />
+            <button type="button" class="btn" id="copy-tunnel-btn">複製</button>
+          </div>
+        </label>
+        <label>
           主機專案路徑（HOMEDVR_HOST_PATH）
           <input type="text" id="host-path" placeholder="/root/HomeDVR" autocomplete="off" />
         </label>
-        <p class="muted" id="tunnel-hint" style="margin:0"></p>
         <p class="muted" id="env-hint" style="margin:0"></p>
         <div class="row-actions">
           <button type="submit" class="btn btn-primary" id="save-remote-btn">儲存</button>
@@ -70,7 +75,12 @@ export async function renderSystemSettings(
   const logBox = main.querySelector("#log-box") as HTMLElement;
   const publicUrlEl = main.querySelector("#public-url") as HTMLInputElement;
   const hostPathEl = main.querySelector("#host-path") as HTMLInputElement;
-  const tunnelHint = main.querySelector("#tunnel-hint") as HTMLElement;
+  const tunnelServiceEl = main.querySelector(
+    "#tunnel-service",
+  ) as HTMLInputElement;
+  const copyTunnelBtn = main.querySelector(
+    "#copy-tunnel-btn",
+  ) as HTMLButtonElement;
   const envHint = main.querySelector("#env-hint") as HTMLElement;
   const remoteForm = main.querySelector("#remote-form") as HTMLFormElement;
 
@@ -91,7 +101,8 @@ export async function renderSystemSettings(
       const { settings } = await getSettings();
       publicUrlEl.value = settings.publicBaseUrl || "";
       hostPathEl.value = settings.hostPath || "";
-      tunnelHint.textContent = `Tunnel 服務位址：${settings.tunnelServiceUrl}`;
+      tunnelServiceEl.value =
+        settings.tunnelServiceUrl || "http://homedvr:8080";
       envHint.textContent = settings.envFileWritable
         ? "儲存後會同步寫入 .env"
         : "無法寫入 .env（仍會存進資料庫，重啟後以資料庫為準）";
@@ -99,6 +110,17 @@ export async function renderSystemSettings(
       toast(e instanceof Error ? e.message : String(e), "error");
     }
   };
+
+  copyTunnelBtn.addEventListener("click", async () => {
+    const v = tunnelServiceEl.value.trim() || "http://homedvr:8080";
+    try {
+      await navigator.clipboard.writeText(v);
+      toast("已複製 Tunnel 服務位址", "ok");
+    } catch {
+      tunnelServiceEl.select();
+      toast("請手動複製選取的文字", "error");
+    }
+  });
 
   const refreshVersion = async () => {
     try {
@@ -150,6 +172,7 @@ export async function renderSystemSettings(
       await saveSettings({
         publicBaseUrl: publicUrlEl.value.trim(),
         hostPath: hostPathEl.value.trim(),
+        tunnelServiceUrl: tunnelServiceEl.value.trim(),
       });
       toast("已儲存", "ok");
       await loadRemoteSettings();

@@ -5,11 +5,12 @@ import { getSetting, setSetting } from "./db.js";
 
 const KEY_PUBLIC_URL = "public_base_url";
 const KEY_HOST_PATH = "homedvr_host_path";
+const KEY_TUNNEL_SERVICE = "tunnel_service_url";
 
 export interface AppSettings {
   publicBaseUrl: string;
   hostPath: string;
-  /** Cloudflare Tunnel service target (fixed for this stack) */
+  /** Value to paste into Cloudflare Tunnel Public Hostname → Service */
   tunnelServiceUrl: string;
   enableWebUpdate: boolean;
   envFileWritable: boolean;
@@ -25,6 +26,13 @@ export function loadSettingsFromDb(): void {
   else if (!config.hostPath && process.env.HOMEDVR_HOST_PATH) {
     config.hostPath = process.env.HOMEDVR_HOST_PATH.replace(/\/$/, "");
   }
+
+  const tunnel = getSetting(KEY_TUNNEL_SERVICE);
+  if (tunnel !== null && tunnel.trim()) {
+    config.tunnelServiceUrl = tunnel.trim();
+  } else if (process.env.TUNNEL_SERVICE_URL) {
+    config.tunnelServiceUrl = process.env.TUNNEL_SERVICE_URL;
+  }
 }
 
 function envFilePath(): string {
@@ -35,7 +43,6 @@ export function isEnvWritable(): boolean {
   try {
     const p = envFilePath();
     if (!fs.existsSync(p)) {
-      // can create if repo dir writable
       fs.accessSync(config.repoPath, fs.constants.W_OK);
       return true;
     }
@@ -77,7 +84,6 @@ export function writeEnvKeys(updates: Record<string, string>): void {
     }
   }
 
-  // Ensure trailing newline
   let body = out.join("\n");
   if (!body.endsWith("\n")) body += "\n";
   fs.writeFileSync(p, body, "utf8");
@@ -87,7 +93,7 @@ export function getAppSettings(): AppSettings {
   return {
     publicBaseUrl: config.publicBaseUrl,
     hostPath: config.hostPath || process.env.HOMEDVR_HOST_PATH || "",
-    tunnelServiceUrl: "http://homedvr:8080",
+    tunnelServiceUrl: config.tunnelServiceUrl,
     enableWebUpdate: config.enableWebUpdate,
     envFileWritable: isEnvWritable(),
   };
@@ -96,6 +102,7 @@ export function getAppSettings(): AppSettings {
 export function updateAppSettings(input: {
   publicBaseUrl?: string;
   hostPath?: string;
+  tunnelServiceUrl?: string;
 }): AppSettings {
   const envUpdates: Record<string, string> = {};
 
@@ -117,8 +124,19 @@ export function updateAppSettings(input: {
     config.hostPath = v;
     setSetting(KEY_HOST_PATH, v);
     envUpdates.HOMEDVR_HOST_PATH = v;
-    // update script also reads env
     process.env.HOMEDVR_HOST_PATH = v;
+  }
+
+  if (input.tunnelServiceUrl !== undefined) {
+    let v = input.tunnelServiceUrl.trim().replace(/\/$/, "");
+    if (!v) v = "http://homedvr:8080";
+    // allow host:port without scheme → assume http
+    if (!/^https?:\/\//i.test(v)) {
+      v = `http://${v}`;
+    }
+    config.tunnelServiceUrl = v;
+    setSetting(KEY_TUNNEL_SERVICE, v);
+    envUpdates.TUNNEL_SERVICE_URL = v;
   }
 
   if (Object.keys(envUpdates).length && isEnvWritable()) {

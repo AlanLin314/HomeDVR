@@ -819,6 +819,22 @@ a:hover {
   gap: 0.85rem;
 }
 
+.input-with-btn {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.input-with-btn input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.input-with-btn .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 label {
   display: flex;
   flex-direction: column;

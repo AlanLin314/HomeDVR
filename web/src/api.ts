@@ -161,6 +161,7 @@ export function getSettings() {
 export function saveSettings(body: {
   publicBaseUrl?: string;
   hostPath?: string;
+  tunnelServiceUrl?: string;
 }) {
   return request<{ settings: AppSettings }>("/api/system/settings", {
     method: "PUT",

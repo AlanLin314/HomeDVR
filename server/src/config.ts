@@ -10,6 +10,9 @@ function boolEnv(name: string, defaultValue: boolean): boolean {
 const runtime = {
   publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, ""),
   hostPath: (process.env.HOMEDVR_HOST_PATH ?? "").replace(/\/$/, ""),
+  tunnelServiceUrl: (
+    process.env.TUNNEL_SERVICE_URL ?? "http://homedvr:8080"
+  ).replace(/\/$/, ""),
 };
 
 export const config = {
@@ -44,5 +47,12 @@ export const config = {
   },
   set hostPath(v: string) {
     runtime.hostPath = (v ?? "").replace(/\/$/, "");
+  },
+  get tunnelServiceUrl(): string {
+    return runtime.tunnelServiceUrl || "http://homedvr:8080";
+  },
+  set tunnelServiceUrl(v: string) {
+    const t = (v ?? "").trim().replace(/\/$/, "");
+    runtime.tunnelServiceUrl = t || "http://homedvr:8080";
   },
 };

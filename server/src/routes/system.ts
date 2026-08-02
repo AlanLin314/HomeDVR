@@ -38,6 +38,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
     const schema = z.object({
       publicBaseUrl: z.string().max(500).optional(),
       hostPath: z.string().max(500).optional(),
+      tunnelServiceUrl: z.string().max(500).optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
