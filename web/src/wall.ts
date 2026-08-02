@@ -61,31 +61,61 @@ export async function renderWall(
   let filter: Filter = loadFilter();
   let expandedId: string | null = null;
 
-  // Desktop toolbar extras on topbar nav
+  // Icon actions on topbar (fullscreen / refresh / cloudflare)
   const desktopNav = shell.querySelector(".desktop-nav");
   if (desktopNav) {
-    const fsBtn = document.createElement("button");
-    fsBtn.className = "btn";
-    fsBtn.type = "button";
-    fsBtn.textContent = "全螢幕";
-    fsBtn.addEventListener("click", () => {
-      if (!document.fullscreenElement) {
-        void shell.requestFullscreen?.();
-      } else {
-        void document.exitFullscreen?.();
-      }
-    });
+    const tools = document.createElement("div");
+    tools.className = "nav-tools";
 
-    const refreshBtn = document.createElement("button");
-    refreshBtn.className = "btn";
-    refreshBtn.type = "button";
-    refreshBtn.textContent = "重新整理";
-    refreshBtn.addEventListener("click", () => {
-      void load(true);
-    });
+    const mkIconBtn = (
+      title: string,
+      svg: string,
+      onClick: () => void,
+    ): HTMLButtonElement => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "icon-btn";
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.innerHTML = svg;
+      b.addEventListener("click", onClick);
+      return b;
+    };
 
-    desktopNav.prepend(refreshBtn);
-    desktopNav.prepend(fsBtn);
+    const iconRefresh = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`;
+    const iconFs = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`;
+    const iconCloud = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
+
+    tools.appendChild(
+      mkIconBtn("重新整理", iconRefresh, () => {
+        void load(true);
+      }),
+    );
+    tools.appendChild(
+      mkIconBtn("全螢幕", iconFs, () => {
+        if (!document.fullscreenElement) {
+          void shell.requestFullscreen?.();
+        } else {
+          void document.exitFullscreen?.();
+        }
+      }),
+    );
+
+    // Cloudflare / public URL (if configured)
+    void fetch("/api/system/version")
+      .then((r) => r.json())
+      .then((v: { publicBaseUrl?: string | null }) => {
+        const url = (v.publicBaseUrl || "").trim();
+        if (!url) return;
+        const cloudBtn = mkIconBtn("Cloudflare 外網", iconCloud, () => {
+          window.open(url, "_blank", "noopener,noreferrer");
+        });
+        cloudBtn.classList.add("icon-btn-cloud");
+        tools.appendChild(cloudBtn);
+      })
+      .catch(() => undefined);
+
+    desktopNav.prepend(tools);
   }
 
   const wrap = document.createElement("div");

@@ -141,6 +141,7 @@ export function getVersion() {
     version: string;
     gitSha: string;
     enableWebUpdate: boolean;
+    publicBaseUrl: string | null;
     update: UpdateState;
   }>("/api/system/version");
 }

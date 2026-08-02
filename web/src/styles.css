@@ -179,6 +179,49 @@ a:hover {
   align-items: center;
 }
 
+/* Wall toolbar icon buttons (refresh / fullscreen / cloudflare) */
+.nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-right: 0.35rem;
+}
+
+.icon-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  font-family: inherit;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.icon-btn:active {
+  transform: scale(0.96);
+}
+
+.icon-btn svg {
+  display: block;
+}
+
+.icon-btn-cloud:hover {
+  color: #f38020;
+}
+
 /* Navbar links: plain text until selected — then pill only */
 .nav-link {
   appearance: none;

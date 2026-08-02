@@ -24,6 +24,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
       version: config.appVersion,
       gitSha: config.gitSha,
       enableWebUpdate: config.enableWebUpdate,
+      publicBaseUrl: config.publicBaseUrl || null,
       update: getUpdateState(),
     };
   });

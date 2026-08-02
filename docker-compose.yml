@@ -1,9 +1,6 @@
-# HomeDVR — single container (API + UI + go2rtc)
-# Joins external network "home-net" so existing cloudflared can reach it.
+# HomeDVR — single container + optional cloudflared on home-net
 #
 # HOMEDVR_HOST_PATH = absolute path on the DOCKER HOST (e.g. /root/HomeDVR).
-# Required for one-click update from inside the container (docker.sock),
-# so ./data is not remapped to a wrong empty directory.
 name: homedvr
 
 services:
@@ -30,12 +27,10 @@ services:
       UPDATE_SCRIPT: /repo/scripts/update.sh
       CHECK_UPDATE_SCRIPT: /repo/scripts/check-update.sh
       COMPOSE_PROJECT_NAME: homedvr
-      # Same value inside container so update script can re-use it
       HOMEDVR_HOST_PATH: ${HOMEDVR_HOST_PATH:-}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       GIT_SHA: ${GIT_SHA:-dev}
     volumes:
-      # Always prefer absolute host path when set (one-click update safety)
       - ${HOMEDVR_HOST_PATH:-.}/data:/data
       - ${HOMEDVR_HOST_PATH:-.}:/repo
       - /var/run/docker.sock:/var/run/docker.sock
@@ -43,17 +38,25 @@ services:
       - default
       - home-net
 
+  # Always defined (no profile). Idle if TUNNEL_TOKEN empty so external
+  # cloudflared on home-net can be used instead without crash-loop.
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: homedvr-tunnel
     restart: unless-stopped
-    profiles:
-      - tunnel
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       - homedvr
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$TUNNEL_TOKEN" ]; then
+          echo "[cloudflared] TUNNEL_TOKEN empty — idle (use external tunnel on home-net, or set token)"
+          exec tail -f /dev/null
+        fi
+        echo "[cloudflared] starting tunnel..."
+        exec cloudflared tunnel --no-autoupdate run
     networks:
       - home-net
 
