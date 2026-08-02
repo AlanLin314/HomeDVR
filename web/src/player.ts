@@ -35,6 +35,8 @@ const CODECS = [
 ];
 
 const CONNECT_TIMEOUT_MS = 12000;
+/** After final play failure (esp. HLS), retry automatically. */
+const AUTO_RETRY_MS = 15000;
 
 function toWsUrl(path: string): string {
   const abs = new URL(path, window.location.origin);
@@ -274,12 +276,15 @@ function startHls(
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let gotPlaying = false;
+  let reportedError = false;
 
   onStatus("connecting");
   prepVideo(video);
 
-  const url = new URL(hlsPath, window.location.origin).toString();
-  video.src = url;
+  // Cache-bust so retries re-fetch the playlist (Safari often sticks on a bad one)
+  const base = new URL(hlsPath, window.location.origin);
+  base.searchParams.set("_t", String(Date.now()));
+  video.src = base.toString();
 
   const markPlaying = () => {
     if (stopped || gotPlaying) return;
@@ -288,16 +293,46 @@ function startHls(
     onStatus("playing");
   };
 
-  const onError = () => {
-    if (!stopped && !gotPlaying) onStatus("error", "HLS 播放失敗");
+  const fail = (msg: string) => {
+    if (stopped || reportedError) return;
+    reportedError = true;
+    if (timer) clearTimeout(timer);
+    onStatus("error", msg);
   };
+
+  const onError = () => {
+    // Report both first-connect and mid-play dropouts
+    fail(gotPlaying ? "HLS 中斷" : "HLS 播放失敗");
+  };
+
+  // Stall watchdog: after playing, no progress for a while → treat as failure
+  let lastTime = 0;
+  let stallTicks = 0;
+  const stallWatch = window.setInterval(() => {
+    if (stopped || reportedError || !gotPlaying) return;
+    if (video.paused) {
+      tryPlay(video);
+      return;
+    }
+    const t = video.currentTime;
+    if (Math.abs(t - lastTime) < 0.05) {
+      stallTicks += 1;
+      if (stallTicks >= 4) {
+        // ~8s with no progress
+        fail("HLS 卡住");
+      }
+    } else {
+      stallTicks = 0;
+      lastTime = t;
+    }
+  }, 2000);
 
   video.addEventListener("playing", markPlaying);
   video.addEventListener("loadeddata", markPlaying);
   video.addEventListener("error", onError);
 
   timer = setTimeout(() => {
-    if (!stopped && !gotPlaying) onStatus("error", "HLS 連線逾時");
+    if (!stopped && !gotPlaying) fail("HLS 連線逾時");
   }, CONNECT_TIMEOUT_MS);
 
   tryPlay(video);
@@ -305,6 +340,7 @@ function startHls(
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);
+    clearInterval(stallWatch);
     video.removeEventListener("playing", markPlaying);
     video.removeEventListener("loadeddata", markPlaying);
     video.removeEventListener("error", onError);
@@ -353,22 +389,55 @@ export function createPlayer(
   let triedHls = false;
   let fallbackLock = false;
   let destroyed = false;
+  let autoRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** User/wall wants this tile live — keep auto-retrying on failure. */
+  let wantLive = false;
+
+  const clearAutoRetry = () => {
+    if (autoRetryTimer) {
+      clearTimeout(autoRetryTimer);
+      autoRetryTimer = null;
+    }
+  };
+
+  const scheduleAutoRetry = (err?: string) => {
+    clearAutoRetry();
+    if (destroyed || !wantLive) return;
+    const msg = err || "播放失敗";
+    badge.hidden = false;
+    badge.textContent = `${msg} · 15秒後重試`;
+    autoRetryTimer = setTimeout(() => {
+      autoRetryTimer = null;
+      if (destroyed || !wantLive) return;
+      // Force a full reconnect (both protocols reset)
+      stopStream?.();
+      stopStream = null;
+      triedMse = false;
+      triedHls = false;
+      fallbackLock = false;
+      status = "idle";
+      start();
+    }, AUTO_RETRY_MS);
+  };
 
   const setStatus = (s: PlayerStatus, err?: string) => {
     if (destroyed) return;
     status = s;
     root.dataset.status = s;
     if (s === "idle") {
+      clearAutoRetry();
       badge.hidden = false;
       badge.textContent = "待機";
       return;
     }
     if (s === "connecting") {
+      clearAutoRetry();
       badge.hidden = false;
       badge.textContent = "連線中…";
       return;
     }
     if (s === "playing") {
+      clearAutoRetry();
       badge.hidden = true;
       badge.textContent = "";
       return;
@@ -379,6 +448,7 @@ export function createPlayer(
       if (fallbackLock) return;
       fallbackLock = true;
       try {
+        // Prefer falling back to the other protocol first…
         if (!triedHls) {
           triedHls = true;
           stopStream?.();
@@ -389,7 +459,10 @@ export function createPlayer(
           triedMse = true;
           stopStream?.();
           stopStream = startMse(video, opts.mse, setStatus);
+          return;
         }
+        // …then auto-retry every 15s (HLS / MSE both failed or single-path fail)
+        scheduleAutoRetry(err);
       } finally {
         // allow next error after a tick so nested start can report
         setTimeout(() => {
@@ -401,8 +474,10 @@ export function createPlayer(
 
   const start = () => {
     if (destroyed) return;
+    wantLive = true;
     // Already connecting / playing — skip re-connect thrash
     if (status === "connecting" || status === "playing") return;
+    clearAutoRetry();
     stopStream?.();
     stopStream = null;
     triedMse = false;
@@ -420,6 +495,8 @@ export function createPlayer(
 
   const stop = () => {
     if (destroyed) return;
+    wantLive = false;
+    clearAutoRetry();
     stopStream?.();
     stopStream = null;
     triedMse = false;
@@ -450,6 +527,8 @@ export function createPlayer(
     el: container,
     destroy: () => {
       destroyed = true;
+      wantLive = false;
+      clearAutoRetry();
       stopStream?.();
       stopStream = null;
       status = "stopped";
@@ -458,10 +537,18 @@ export function createPlayer(
     start,
     stop,
     retry: () => {
-      stop();
+      clearAutoRetry();
+      stopStream?.();
+      stopStream = null;
+      triedMse = false;
+      triedHls = false;
+      fallbackLock = false;
+      wantLive = true;
+      status = "idle";
       start();
     },
     getStatus: () => status,
-    isActive: () => status === "connecting" || status === "playing",
+    isActive: () =>
+      wantLive || status === "connecting" || status === "playing",
   };
 }
