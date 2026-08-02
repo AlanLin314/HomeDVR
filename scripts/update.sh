@@ -59,11 +59,11 @@ compose() {
   fi
 }
 
-echo "[update] docker compose build..."
-compose build
+echo "[update] docker compose build homedvr..."
+compose build homedvr
 
 echo "[update] docker compose up -d..."
-compose up -d
+compose up -d --remove-orphans
 
 echo "[update] done at commit $(git rev-parse --short HEAD)"
 echo "[update] data/ and .env were not modified by this script"

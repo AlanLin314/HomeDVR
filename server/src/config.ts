@@ -7,7 +7,7 @@ function boolEnv(name: string, defaultValue: boolean): boolean {
 }
 
 export const config = {
-  port: Number(process.env.PORT ?? 3000),
+  port: Number(process.env.PORT ?? 8080),
   databasePath:
     process.env.DATABASE_PATH ??
     path.resolve(process.cwd(), "../data/homedvr.db"),

@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
+import httpProxy from "@fastify/http-proxy";
 import fs from "node:fs";
 import { config } from "./config.js";
 import { initDb, listCameras, updateCameraRow } from "./db.js";
@@ -17,6 +18,15 @@ async function main() {
   });
 
   await app.register(cors, { origin: true });
+
+  // Same-origin media proxy → local go2rtc (single-container layout)
+  await app.register(httpProxy, {
+    upstream: config.go2rtcUrl,
+    prefix: "/go2rtc",
+    rewritePrefix: "",
+    websocket: true,
+  });
+
   await app.register(groupRoutes);
   await app.register(cameraRoutes);
   await app.register(systemRoutes);
@@ -28,7 +38,7 @@ async function main() {
       prefix: "/",
     });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith("/api")) {
+      if (req.url.startsWith("/api") || req.url.startsWith("/go2rtc")) {
         return reply.code(404).send({ error: "Not found" });
       }
       return reply.sendFile("index.html");

@@ -1,55 +1,25 @@
+# HomeDVR — single container (API + UI + go2rtc)
+# Optional: cloudflared profile for Cloudflare Tunnel
 services:
-  # Ensure go2rtc has a writable config file (API stream updates try to write yaml)
-  go2rtc-init:
-    image: busybox:1.36
-    user: "0:0"
-    volumes:
-      - ./data/go2rtc:/config
-      - ./go2rtc/go2rtc.example.yaml:/example/go2rtc.yaml:ro
-    command:
-      - sh
-      - -c
-      - |
-        mkdir -p /config
-        if [ ! -f /config/go2rtc.yaml ]; then
-          cp /example/go2rtc.yaml /config/go2rtc.yaml
-          echo "created /config/go2rtc.yaml"
-        else
-          echo "config already exists"
-        fi
-        # go2rtc may rewrite yaml via rename; need dir + file writable
-        chmod 777 /config
-        chmod 666 /config/go2rtc.yaml
-        ls -la /config
-
-  go2rtc:
-    image: alexxit/go2rtc:latest
-    # Avoid non-root image user failing to rewrite /config/go2rtc.yaml
-    user: "0:0"
-    restart: unless-stopped
-    depends_on:
-      - go2rtc-init
-    # Writable directory under data/ — never mount yaml as :ro
-    volumes:
-      - ./data/go2rtc:/config
-    networks:
-      - homedvr
-
-  api:
+  homedvr:
     build:
       context: .
-      dockerfile: server/Dockerfile
+      dockerfile: Dockerfile
       args:
         APP_VERSION: ${APP_VERSION:-0.1.0}
         GIT_SHA: ${GIT_SHA:-dev}
+    image: homedvr:latest
+    container_name: homedvr
     restart: unless-stopped
+    ports:
+      - "${HOMEDVR_PORT:-8080}:8080"
     environment:
       NODE_ENV: production
-      PORT: "3000"
+      PORT: "8080"
       DATABASE_PATH: /data/homedvr.db
-      GO2RTC_URL: http://go2rtc:1984
+      GO2RTC_URL: http://127.0.0.1:1984
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
-      ENABLE_WEB_UPDATE: ${ENABLE_WEB_UPDATE:-true}
+      ENABLE_WEB_UPDATE: ${ENABLE_WEB_UPDATE:-false}
       REPO_PATH: /repo
       UPDATE_SCRIPT: /repo/scripts/update.sh
       CHECK_UPDATE_SCRIPT: /repo/scripts/check-update.sh
@@ -57,28 +27,16 @@ services:
       GIT_SHA: ${GIT_SHA:-dev}
     volumes:
       - ./data:/data
-      - .:/repo
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - go2rtc
-    networks:
-      - homedvr
+      # Only needed if ENABLE_WEB_UPDATE=true
+      - .:/repo:ro
+      # Uncomment if you enable web update:
+      # - /var/run/docker.sock:/var/run/docker.sock
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-    depends_on:
-      - api
-      - go2rtc
-    networks:
-      - homedvr
-
+  # Optional: only when using Cloudflare Tunnel
+  # docker compose --profile tunnel up -d
   cloudflared:
     image: cloudflare/cloudflared:latest
+    container_name: homedvr-tunnel
     restart: unless-stopped
     profiles:
       - tunnel
@@ -86,10 +44,4 @@ services:
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
-      - caddy
-    networks:
       - homedvr
-
-networks:
-  homedvr:
-    driver: bridge
