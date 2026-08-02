@@ -1,5 +1,7 @@
 # HomeDVR — single container (API + UI + go2rtc)
 # Optional: cloudflared profile for Cloudflare Tunnel
+name: homedvr
+
 services:
   homedvr:
     build:

@@ -90,16 +90,41 @@ git pull && docker compose up -d --build
 
 ---
 
-## 從「舊版多容器」升級
+## 從「舊版多容器」升級（清掉 repo-api-1 / repo-go2rtc-1）
 
-舊版有 `caddy`、`api`、`go2rtc`、`go2rtc-init` 多個服務。升級：
+舊版 Compose 會留下像 `repo-api-1`、`repo-go2rtc-1`、`repo-caddy-1` 這種**會自動重啟**的容器。  
+只 `up` 新版**不會**自動刪掉它們，要手動清：
 
 ```bash
-cd /root/HomeDVR   # 你的路徑
+cd /root/HomeDVR   # 你的專案目錄（或實際路徑）
 git pull
+
+# 1) 停掉目前目錄的 compose，並清孤兒
 docker compose down --remove-orphans
+
+# 2) 強制刪掉舊名字（名稱可能是 repo-xxx 或 homedvr-xxx）
+docker rm -f \
+  repo-api-1 repo-go2rtc-1 repo-caddy-1 repo-go2rtc-init-1 \
+  homedvr-api-1 homedvr-go2rtc-1 homedvr-caddy-1 \
+  homedvr 2>/dev/null || true
+
+# 3) 看還有沒有殘留
+docker ps -a
+
+# 4) 只啟動新的單一容器
 docker compose up -d --build
-docker compose ps   # 應只剩 homedvr
+
+# 5) 確認：應該只剩名為 homedvr 的一個
+docker compose ps
+docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
+```
+
+或用腳本：
+
+```bash
+chmod +x scripts/cleanup-old-containers.sh
+./scripts/cleanup-old-containers.sh
+docker compose up -d --build
 ```
 
 `data/homedvr.db` 會沿用，攝影機設定不會丟。
