@@ -5,9 +5,22 @@ const FILTER_KEY = "homedvr.wallGroupFilter";
 
 type Filter = "all" | "ungrouped" | string; // string = group id
 
-function colsFor(n: number, mobile: boolean): number {
+/**
+ * Grid columns by viewport width + camera count.
+ * Phones: 1 per row; larger phones/tablets: up to 2; desktop: up to 4.
+ */
+function colsFor(n: number, width: number): number {
   if (n <= 1) return 1;
-  if (mobile) return 2;
+  // Phone / narrow: always one camera per row
+  if (width < 640) return 1;
+  // Large phone / small tablet
+  if (width < 900) return Math.min(2, n);
+  // Tablet / small laptop
+  if (width < 1200) {
+    if (n <= 4) return Math.min(2, n);
+    return Math.min(3, n);
+  }
+  // Desktop
   if (n <= 4) return 2;
   if (n <= 9) return 3;
   return 4;
@@ -15,6 +28,10 @@ function colsFor(n: number, mobile: boolean): number {
 
 function isMobile(): boolean {
   return window.matchMedia("(max-width: 768px)").matches;
+}
+
+function viewportWidth(): number {
+  return window.innerWidth || document.documentElement.clientWidth || 800;
 }
 
 function loadFilter(): Filter {
@@ -170,7 +187,7 @@ export async function renderWall(
     }
 
     wall.style.display = "grid";
-    wall.dataset.cols = String(colsFor(cameras.length, isMobile()));
+    wall.dataset.cols = String(colsFor(cameras.length, viewportWidth()));
 
     for (const cam of cameras) {
       const tile = document.createElement("div");

@@ -385,16 +385,6 @@ a:hover {
   grid-template-columns: repeat(4, 1fr);
 }
 
-@media (max-width: 768px) {
-  .wall[data-cols="3"],
-  .wall[data-cols="4"] {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .wall[data-cols="1"] {
-    grid-template-columns: 1fr;
-  }
-}
-
 .tile {
   position: relative;
   background: rgba(0, 0, 0, 0.45);
@@ -403,6 +393,19 @@ a:hover {
   border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Single-column phone: taller tiles for readable live view */
+.wall[data-cols="1"] .tile {
+  min-height: min(52vw, 280px);
+  aspect-ratio: 16 / 10;
+}
+
+@media (max-width: 639px) {
+  .wall {
+    gap: 8px;
+    padding: 0 8px 8px;
+  }
 }
 
 .tile.expanded {
