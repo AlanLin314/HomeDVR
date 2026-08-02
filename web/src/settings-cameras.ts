@@ -21,8 +21,8 @@ export async function renderCameraSettings(
 ): Promise<void> {
   main.innerHTML = `
     <div class="tabs">
-      <a class="btn active" href="#/settings">攝影機</a>
-      <a class="btn" href="#/settings/system">系統</a>
+      <a class="btn active" href="/settings">攝影機</a>
+      <a class="btn" href="/settings/system">系統</a>
     </div>
     <h2>攝影機</h2>
     <p class="sub">新增 RTSP／NVR 串流，並依區域分組（例如區域 A、區域 B）。</p>
@@ -249,7 +249,7 @@ export async function renderCameraSettings(
     try {
       const { cameras } = await listCameras();
       if (cameras.length === 0) {
-        tableWrap.innerHTML = `<p class="muted">尚無攝影機。<a href="#/">回多畫面牆</a></p>`;
+        tableWrap.innerHTML = `<p class="muted">尚無攝影機。<a href="/">回多畫面牆</a></p>`;
         return;
       }
       tableWrap.innerHTML = `
@@ -316,7 +316,7 @@ export async function renderCameraSettings(
 
   await Promise.all([refreshGroups(), refreshTable()]);
 
-  // Deep-link from wall: #/settings?edit=<id>
+  // Deep-link from wall: /settings?edit=<id>
   if (opts?.editId) {
     await startEdit(opts.editId);
   }

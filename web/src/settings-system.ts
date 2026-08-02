@@ -14,8 +14,8 @@ export async function renderSystemSettings(
 ): Promise<void> {
   main.innerHTML = `
     <div class="tabs">
-      <a class="btn" href="#/settings">攝影機</a>
-      <a class="btn active" href="#/settings/system">系統</a>
+      <a class="btn" href="/settings">攝影機</a>
+      <a class="btn active" href="/settings/system">系統</a>
     </div>
     <h2>系統</h2>
     <p class="sub">版本、外網網址與更新。</p>
