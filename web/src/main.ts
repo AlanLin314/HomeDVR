@@ -36,8 +36,8 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
     </div>
     <nav class="desktop-nav">
       <a class="nav-link ${active === "wall" ? "active" : ""}" href="/">多畫面牆</a>
-      <a class="nav-link ${active === "cameras" ? "active" : ""}" href="/settings">攝影機</a>
-      <a class="nav-link ${active === "system" ? "active" : ""}" href="/settings/system">系統</a>
+      <a class="nav-link ${active === "cameras" ? "active" : ""}" href="/cameras">攝影機</a>
+      <a class="nav-link ${active === "system" ? "active" : ""}" href="/system">系統</a>
     </nav>
   `;
   root.appendChild(bar);
@@ -58,11 +58,11 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
       <span class="ico">▦</span>
       <span>畫面牆</span>
     </a>
-    <a href="/settings" class="nav-link ${active === "cameras" ? "active" : ""}">
+    <a href="/cameras" class="nav-link ${active === "cameras" ? "active" : ""}">
       <span class="ico">📷</span>
       <span>攝影機</span>
     </a>
-    <a href="/settings/system" class="nav-link ${active === "system" ? "active" : ""}">
+    <a href="/system" class="nav-link ${active === "system" ? "active" : ""}">
       <span class="ico">⚙️</span>
       <span>系統</span>
     </a>
@@ -73,10 +73,21 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
 }
 
 async function render() {
-  const { path, params } = parseRoute();
+  let { path, params } = parseRoute();
+
+  // legacy redirects
+  if (path === "/settings" || path === "/settings/cameras") {
+    const q = params.toString();
+    history.replaceState({}, "", q ? `/cameras?${q}` : "/cameras");
+    path = "/cameras";
+  } else if (path === "/settings/system") {
+    history.replaceState({}, "", "/system");
+    path = "/system";
+  }
+
   app.innerHTML = "";
 
-  if (path === "/settings" || path === "/settings/cameras") {
+  if (path === "/cameras" || path === "/camera") {
     const { root, main } = shell("cameras");
     main.classList.add("settings");
     app.appendChild(root);
@@ -86,7 +97,7 @@ async function render() {
     return;
   }
 
-  if (path === "/settings/system") {
+  if (path === "/system") {
     const { root, main } = shell("system");
     main.classList.add("settings");
     app.appendChild(root);
@@ -94,7 +105,7 @@ async function render() {
     return;
   }
 
-  // / and anything else → wall (main page)
+  // / → wall (home)
   const { root, main } = shell("wall");
   app.appendChild(root);
   await renderWall(main, root, toast);

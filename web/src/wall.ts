@@ -200,7 +200,7 @@ export async function renderWall(
           ? `
           <div class="empty-icon">📷</div>
           <div>尚未設定攝影機</div>
-          <a class="btn btn-primary" href="/settings">前往新增</a>
+          <a class="btn btn-primary" href="/cameras">前往新增</a>
         `
           : `
           <div class="empty-icon">⬚</div>
@@ -261,7 +261,7 @@ export async function renderWall(
       edit.title = "編輯此攝影機";
       edit.addEventListener("click", (e) => {
         e.stopPropagation();
-        navigate(`/settings?edit=${encodeURIComponent(cam.id)}`);
+        navigate(`/cameras?edit=${encodeURIComponent(cam.id)}`);
       });
 
       const retry = document.createElement("button");

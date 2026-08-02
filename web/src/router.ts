@@ -22,7 +22,7 @@ export function navigate(url: string): void {
   window.dispatchEvent(new Event("app:navigate"));
 }
 
-/** Migrate old hash routes: /#/settings → /settings */
+/** Migrate old hash routes: /#/settings → /cameras */
 export function migrateHashRoute(): void {
   const h = location.hash;
   if (!h || h === "#" || h === "#/") {
@@ -32,8 +32,15 @@ export function migrateHashRoute(): void {
     return;
   }
   if (h.startsWith("#/")) {
-    const next = h.slice(1); // /settings?edit=x
-    history.replaceState({}, "", next || "/");
+    let next = h.slice(1) || "/";
+    if (next === "/settings" || next.startsWith("/settings?")) {
+      next = next.replace(/^\/settings/, "/cameras");
+    } else if (next === "/settings/system" || next.startsWith("/settings/system")) {
+      next = "/system";
+    } else if (next === "/settings/cameras") {
+      next = "/cameras";
+    }
+    history.replaceState({}, "", next);
   }
 }
 
