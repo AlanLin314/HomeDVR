@@ -1,4 +1,4 @@
-# HomeDVR — single container + optional cloudflared on home-net
+# HomeDVR — single container; joins home-net for shared cloudflared
 #
 # HOMEDVR_HOST_PATH = absolute path on the DOCKER HOST (e.g. /root/HomeDVR).
 name: homedvr
@@ -38,25 +38,20 @@ services:
       - default
       - home-net
 
-  # Always defined (no profile). Idle if TUNNEL_TOKEN empty so external
-  # cloudflared on home-net can be used instead without crash-loop.
+  # Built-in tunnel (optional). Prefer shared cloudflared on home-net if you already have one.
+  # Start with:  docker compose --profile tunnel up -d
+  # Or set in .env:  COMPOSE_PROFILES=tunnel
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: homedvr-tunnel
     restart: unless-stopped
+    profiles:
+      - tunnel
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env for tunnel profile}
     depends_on:
       - homedvr
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        if [ -z "$$TUNNEL_TOKEN" ]; then
-          echo "[cloudflared] TUNNEL_TOKEN empty — idle (use external tunnel on home-net, or set token)"
-          exec tail -f /dev/null
-        fi
-        echo "[cloudflared] starting tunnel..."
-        exec cloudflared tunnel --no-autoupdate run
     networks:
       - home-net
 
