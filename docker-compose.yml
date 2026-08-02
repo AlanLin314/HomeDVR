@@ -1,11 +1,15 @@
 # HomeDVR — single container (API + UI + go2rtc)
 # Joins external network "home-net" so existing cloudflared can reach it.
+#
+# HOMEDVR_HOST_PATH = absolute path on the DOCKER HOST (e.g. /root/HomeDVR).
+# Required for one-click update from inside the container (docker.sock),
+# so ./data is not remapped to a wrong empty directory.
 name: homedvr
 
 services:
   homedvr:
     build:
-      context: .
+      context: ${HOMEDVR_HOST_PATH:-.}
       dockerfile: Dockerfile
       args:
         APP_VERSION: ${APP_VERSION:-0.1.0}
@@ -14,7 +18,6 @@ services:
     container_name: homedvr
     restart: unless-stopped
     ports:
-      # LAN access: http://主機IP:8080
       - "${HOMEDVR_PORT:-8080}:8080"
     environment:
       NODE_ENV: production
@@ -27,18 +30,19 @@ services:
       UPDATE_SCRIPT: /repo/scripts/update.sh
       CHECK_UPDATE_SCRIPT: /repo/scripts/check-update.sh
       COMPOSE_PROJECT_NAME: homedvr
+      # Same value inside container so update script can re-use it
+      HOMEDVR_HOST_PATH: ${HOMEDVR_HOST_PATH:-}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       GIT_SHA: ${GIT_SHA:-dev}
     volumes:
-      - ./data:/data
-      - .:/repo
+      # Always prefer absolute host path when set (one-click update safety)
+      - ${HOMEDVR_HOST_PATH:-.}/data:/data
+      - ${HOMEDVR_HOST_PATH:-.}:/repo
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - default
       - home-net
 
-  # Only if you do NOT already have a shared cloudflared on home-net
-  # docker compose --profile tunnel up -d
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: homedvr-tunnel
@@ -56,7 +60,6 @@ services:
 networks:
   default:
     name: homedvr_default
-  # Must already exist (or create once: docker network create home-net)
   home-net:
     external: true
     name: home-net

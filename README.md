@@ -36,6 +36,12 @@ cd HomeDVR
 cp .env.example .env
 mkdir -p data
 
+# 必填：主機上的絕對路徑（一鍵更新才不會掛到空的 data）
+# 假設 clone 在 /root/HomeDVR：
+pwd
+# 把 .env 裡 HOMEDVR_HOST_PATH 改成上面 pwd 的結果
+# HOMEDVR_HOST_PATH=/root/HomeDVR
+
 # 清掉舊版「多容器」殘留（若你以前跑過舊 compose）
 docker compose down --remove-orphans
 
@@ -221,6 +227,7 @@ docker compose --profile tunnel up -d
 |------|------|
 | `HOMEDVR_PORT` | 主機對外埠，預設 8080 |
 | `ENABLE_WEB_UPDATE` | 網頁一鍵更新（預設 **true**；掛 docker.sock + 專案目錄） |
+| `HOMEDVR_HOST_PATH` | **主機絕對路徑**（如 `/root/HomeDVR`）。一鍵更新必填，否則會起新容器且 data 是空的 |
 | `TUNNEL_TOKEN` | 僅 tunnel profile |
 | `PUBLIC_BASE_URL` | 外網網址（文件用） |
 
