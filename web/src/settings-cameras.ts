@@ -17,6 +17,7 @@ import {
 export async function renderCameraSettings(
   main: HTMLElement,
   toast: (m: string, t?: "ok" | "error") => void,
+  opts?: { editId?: string | null },
 ): Promise<void> {
   main.innerHTML = `
     <div class="tabs">
@@ -314,6 +315,11 @@ export async function renderCameraSettings(
   }
 
   await Promise.all([refreshGroups(), refreshTable()]);
+
+  // Deep-link from wall: #/settings?edit=<id>
+  if (opts?.editId) {
+    await startEdit(opts.editId);
+  }
 }
 
 function groupCardHtml(g: Group): string {
@@ -323,7 +329,7 @@ function groupCardHtml(g: Group): string {
         <strong>${escapeHtml(g.name)}</strong>
         <span class="badge group">${g.cameraCount} 台</span>
       </div>
-      <div class="meta mono">${escapeHtml(g.id)}</div>
+      <div class="meta mono truncate-url" title="${escapeAttr(g.id)}">${escapeHtml(g.id)}</div>
       <div class="row-actions">
         <button type="button" class="btn btn-sm" data-gaction="rename" data-id="${escapeAttr(g.id)}">重新命名</button>
         <button type="button" class="btn btn-sm btn-danger" data-gaction="delete" data-id="${escapeAttr(g.id)}">刪除</button>
@@ -335,7 +341,7 @@ function groupCardHtml(g: Group): string {
 function groupRowHtml(g: Group): string {
   return `
     <tr>
-      <td><strong>${escapeHtml(g.name)}</strong><div class="mono muted">${escapeHtml(g.id)}</div></td>
+      <td><strong>${escapeHtml(g.name)}</strong><div class="mono muted truncate-url" title="${escapeAttr(g.id)}">${escapeHtml(g.id)}</div></td>
       <td>${g.cameraCount}</td>
       <td>
         <div class="row-actions">
@@ -363,7 +369,7 @@ function camCardHtml(c: Camera): string {
       </div>
       <div class="meta">
         <span class="badge group">${escapeHtml(c.groupName || "未分組")}</span>
-        <div class="mono" style="margin-top:0.35rem">${escapeHtml(c.sourceMasked)}</div>
+        <div class="mono truncate-url" style="margin-top:0.35rem" title="${escapeAttr(c.sourceMasked)}">${escapeHtml(c.sourceMasked)}</div>
       </div>
       <div class="row-actions">
         <button type="button" class="btn btn-sm" data-action="edit" data-id="${escapeAttr(c.id)}">編輯</button>
@@ -378,10 +384,10 @@ function camCardHtml(c: Camera): string {
 function camRowHtml(c: Camera): string {
   return `
     <tr>
-      <td><strong>${escapeHtml(c.name)}</strong><div class="mono muted">${escapeHtml(c.id)}</div></td>
+      <td><strong>${escapeHtml(c.name)}</strong><div class="mono muted truncate-url" title="${escapeAttr(c.id)}">${escapeHtml(c.id)}</div></td>
       <td><span class="badge group">${escapeHtml(c.groupName || "未分組")}</span></td>
       <td>${statusBadge(c)}</td>
-      <td class="mono">${escapeHtml(c.sourceMasked)}</td>
+      <td class="mono truncate-url" title="${escapeAttr(c.sourceMasked)}">${escapeHtml(c.sourceMasked)}</td>
       <td>
         <div class="row-actions">
           <button type="button" class="btn btn-sm" data-action="edit" data-id="${escapeAttr(c.id)}">編輯</button>

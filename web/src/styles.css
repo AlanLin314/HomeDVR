@@ -423,16 +423,20 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.5rem 0.6rem;
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.72),
-    rgba(0, 0, 0, 0.2),
-    transparent
-  );
+  padding: 0.4rem 0.55rem;
+  /* flat bar — no gradient / drop shadow over the video */
+  background: rgba(0, 0, 0, 0.42);
   font-size: 0.8rem;
   font-weight: 600;
   pointer-events: none;
+}
+
+.tile-header .tile-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .tile-header .group-tag {
@@ -718,7 +722,7 @@ select:focus {
   font-size: 0.8rem;
   color: var(--muted);
   margin-bottom: 0.65rem;
-  word-break: break-all;
+  overflow: hidden;
 }
 
 .badge {
@@ -757,7 +761,28 @@ select:focus {
 .mono {
   font-family: var(--mono);
   font-size: 0.78rem;
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  max-width: 100%;
+  display: block;
+}
+
+/* long RTSP / http URLs — single line clip */
+.truncate-url,
+td.mono,
+.item-card .meta .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  max-width: 100%;
+  display: block;
+}
+
+.table-desktop td.mono {
+  max-width: 220px;
 }
 
 .toast {

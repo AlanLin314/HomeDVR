@@ -181,7 +181,9 @@ export async function renderWall(
       const header = document.createElement("div");
       header.className = "tile-header";
       const title = document.createElement("span");
+      title.className = "tile-title";
       title.textContent = cam.name;
+      title.title = cam.name;
       header.appendChild(title);
       if (cam.groupName) {
         const tag = document.createElement("span");
@@ -192,6 +194,15 @@ export async function renderWall(
 
       const actions = document.createElement("div");
       actions.className = "actions";
+
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "編輯";
+      edit.title = "編輯此攝影機";
+      edit.addEventListener("click", (e) => {
+        e.stopPropagation();
+        location.hash = `#/settings?edit=${encodeURIComponent(cam.id)}`;
+      });
 
       const retry = document.createElement("button");
       retry.type = "button";
@@ -210,7 +221,7 @@ export async function renderWall(
         paintWall();
       });
 
-      actions.append(retry, expand);
+      actions.append(edit, retry, expand);
       header.appendChild(actions);
       tile.appendChild(header);
 

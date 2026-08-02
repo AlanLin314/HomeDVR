@@ -5,9 +5,15 @@ import { renderSystemSettings } from "./settings-system";
 
 const app = document.getElementById("app")!;
 
-function route(): string {
-  const h = location.hash.replace(/^#/, "") || "/";
-  return h.startsWith("/") ? h : `/${h}`;
+function parseHash(): { path: string; params: URLSearchParams } {
+  const raw = location.hash.replace(/^#/, "") || "/";
+  const full = raw.startsWith("/") ? raw : `/${raw}`;
+  const q = full.indexOf("?");
+  if (q === -1) return { path: full, params: new URLSearchParams() };
+  return {
+    path: full.slice(0, q) || "/",
+    params: new URLSearchParams(full.slice(q + 1)),
+  };
 }
 
 function toast(msg: string, type: "ok" | "error" = "ok") {
@@ -75,14 +81,16 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
 }
 
 async function render() {
-  const path = route();
+  const { path, params } = parseHash();
   app.innerHTML = "";
 
   if (path === "/settings" || path === "/settings/cameras") {
     const { root, main } = shell("cameras");
     main.classList.add("settings");
     app.appendChild(root);
-    await renderCameraSettings(main, toast);
+    await renderCameraSettings(main, toast, {
+      editId: params.get("edit"),
+    });
     return;
   }
 
