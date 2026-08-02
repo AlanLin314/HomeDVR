@@ -6,6 +6,12 @@ function boolEnv(name: string, defaultValue: boolean): boolean {
   return ["1", "true", "yes", "on"].includes(v.toLowerCase());
 }
 
+/** Mutable app settings (DB/UI can override env at runtime) */
+const runtime = {
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, ""),
+  hostPath: (process.env.HOMEDVR_HOST_PATH ?? "").replace(/\/$/, ""),
+};
+
 export const config = {
   port: Number(process.env.PORT ?? 8080),
   databasePath:
@@ -15,7 +21,6 @@ export const config = {
     /\/$/,
     "",
   ),
-  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, ""),
   enableWebUpdate: boolEnv("ENABLE_WEB_UPDATE", true),
   repoPath: process.env.REPO_PATH ?? path.resolve(process.cwd(), ".."),
   updateScript:
@@ -27,4 +32,17 @@ export const config = {
   appVersion: process.env.APP_VERSION ?? "0.1.0",
   gitSha: process.env.GIT_SHA ?? "dev",
   publicDir: process.env.PUBLIC_DIR ?? path.resolve(process.cwd(), "public"),
+
+  get publicBaseUrl(): string {
+    return runtime.publicBaseUrl;
+  },
+  set publicBaseUrl(v: string) {
+    runtime.publicBaseUrl = (v ?? "").replace(/\/$/, "");
+  },
+  get hostPath(): string {
+    return runtime.hostPath;
+  },
+  set hostPath(v: string) {
+    runtime.hostPath = (v ?? "").replace(/\/$/, "");
+  },
 };

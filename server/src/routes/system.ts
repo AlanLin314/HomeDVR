@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { config } from "../config.js";
 import { isGo2rtcHealthy } from "../go2rtc.js";
+import { getAppSettings, updateAppSettings } from "../settings.js";
 import {
   checkForUpdates,
   getUpdateState,
@@ -27,6 +28,29 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
       publicBaseUrl: config.publicBaseUrl || null,
       update: getUpdateState(),
     };
+  });
+
+  app.get("/api/system/settings", async () => {
+    return { settings: getAppSettings() };
+  });
+
+  app.put("/api/system/settings", async (req, reply) => {
+    const schema = z.object({
+      publicBaseUrl: z.string().max(500).optional(),
+      hostPath: z.string().max(500).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.flatten() });
+    }
+    try {
+      const settings = updateAppSettings(parsed.data);
+      return { settings };
+    } catch (e) {
+      return reply
+        .code(400)
+        .send({ error: e instanceof Error ? e.message : String(e) });
+    }
   });
 
   app.get("/api/system/update/status", async () => {

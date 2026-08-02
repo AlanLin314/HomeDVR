@@ -16,13 +16,11 @@ set_homedvr_host_path
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-homedvr}"
 export HOMEDVR_HOST_PATH
 
-# Load host .env (via /repo mount) for HOMEDVR_PORT etc.
 if [[ -f "$ROOT/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
   source "$ROOT/.env"
   set +a
-  # re-apply after source (path must stay absolute host path)
   export HOMEDVR_HOST_PATH
   export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-homedvr}"
 fi

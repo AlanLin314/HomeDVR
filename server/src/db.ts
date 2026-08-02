@@ -58,7 +58,35 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_groups_sort ON groups(sort_order, name);
     CREATE INDEX IF NOT EXISTS idx_cameras_sort ON cameras(sort_order, name);
     CREATE INDEX IF NOT EXISTS idx_cameras_group ON cameras(group_id);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
+}
+
+// ── settings ────────────────────────────────────────────
+
+export function getSetting(key: string): string | null {
+  const row = getDb()
+    .prepare(`SELECT value FROM settings WHERE key = ?`)
+    .get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(key: string, value: string): void {
+  getDb()
+    .prepare(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    )
+    .run(key, value, new Date().toISOString());
+}
+
+export function deleteSetting(key: string): void {
+  getDb().prepare(`DELETE FROM settings WHERE key = ?`).run(key);
 }
 
 // ── groups ──────────────────────────────────────────────

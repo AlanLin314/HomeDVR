@@ -146,6 +146,28 @@ export function getVersion() {
   }>("/api/system/version");
 }
 
+export interface AppSettings {
+  publicBaseUrl: string;
+  hostPath: string;
+  tunnelServiceUrl: string;
+  enableWebUpdate: boolean;
+  envFileWritable: boolean;
+}
+
+export function getSettings() {
+  return request<{ settings: AppSettings }>("/api/system/settings");
+}
+
+export function saveSettings(body: {
+  publicBaseUrl?: string;
+  hostPath?: string;
+}) {
+  return request<{ settings: AppSettings }>("/api/system/settings", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 export function checkUpdate() {
   return request<{
     local: string;

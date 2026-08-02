@@ -1,7 +1,9 @@
 import {
   checkUpdate,
+  getSettings,
   getUpdateStatus,
   getVersion,
+  saveSettings,
   startUpdate,
   type UpdateState,
 } from "./api";
@@ -16,7 +18,7 @@ export async function renderSystemSettings(
       <a class="btn active" href="#/settings/system">系統</a>
     </div>
     <h2>系統</h2>
-    <p class="sub">版本資訊與一鍵更新。更新期間服務會短暫中斷。</p>
+    <p class="sub">版本、外網網址與更新。</p>
 
     <div class="card glass">
       <h3>目前版本</h3>
@@ -25,30 +27,38 @@ export async function renderSystemSettings(
     </div>
 
     <div class="card glass">
-      <h3>更新</h3>
+      <h3>外網存取</h3>
       <p class="muted" style="margin-top:0">
-        僅執行固定腳本 <span class="mono">scripts/update.sh</span>：
-        <span class="mono">git pull</span> 後由獨立容器
-        <span class="mono">homedvr-updater</span> 做
-        <span class="mono">build + force-recreate</span>
-       （避免更新過程把自己殺死後中斷）。
-        需 <span class="mono">HOMEDVR_HOST_PATH</span>、docker.sock。
-        按下後請等 1～3 分鐘再重新整理頁面。
+        使用已有的 cloudflared 時，Tunnel 服務請填
+        <span class="mono">http://homedvr:8080</span>。
+        下方網址會顯示在頂部雲圖示，並寫入 <span class="mono">.env</span>。
       </p>
-      <div class="row-actions" style="margin:0.85rem 0">
+      <form class="form-grid" id="remote-form" style="margin-top:0.85rem">
+        <label>
+          外網網址（PUBLIC_BASE_URL）
+          <input type="url" id="public-url" placeholder="https://dvr.flaremetal.com" autocomplete="off" />
+        </label>
+        <label>
+          主機專案路徑（HOMEDVR_HOST_PATH）
+          <input type="text" id="host-path" placeholder="/root/HomeDVR" autocomplete="off" />
+        </label>
+        <p class="muted" id="tunnel-hint" style="margin:0"></p>
+        <p class="muted" id="env-hint" style="margin:0"></p>
+        <div class="row-actions">
+          <button type="submit" class="btn btn-primary" id="save-remote-btn">儲存</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card glass">
+      <h3>更新</h3>
+      <div class="row-actions" style="margin:0.5rem 0 0.85rem">
         <button type="button" class="btn btn-block-sm" id="check-btn">檢查更新</button>
         <button type="button" class="btn btn-primary btn-block-sm" id="update-btn" disabled>一鍵更新</button>
       </div>
       <div id="check-result" class="muted"></div>
-      <h3 style="margin-top:1rem">更新日誌</h3>
+      <h3 style="margin-top:1rem">日誌</h3>
       <div class="log-box" id="log-box">（尚無）</div>
-    </div>
-
-    <div class="card glass">
-      <h3>外網存取</h3>
-      <p class="muted" style="margin:0">
-        請依 README 設定 Cloudflare Tunnel + Access。未通過 Access 的訪客看不到畫面牆、API 與串流。
-      </p>
     </div>
   `;
 
@@ -58,6 +68,11 @@ export async function renderSystemSettings(
   const updateBtn = main.querySelector("#update-btn") as HTMLButtonElement;
   const checkResult = main.querySelector("#check-result") as HTMLElement;
   const logBox = main.querySelector("#log-box") as HTMLElement;
+  const publicUrlEl = main.querySelector("#public-url") as HTMLInputElement;
+  const hostPathEl = main.querySelector("#host-path") as HTMLInputElement;
+  const tunnelHint = main.querySelector("#tunnel-hint") as HTMLElement;
+  const envHint = main.querySelector("#env-hint") as HTMLElement;
+  const remoteForm = main.querySelector("#remote-form") as HTMLFormElement;
 
   let enableWebUpdate = false;
   let pollTimer: number | null = null;
@@ -71,14 +86,28 @@ export async function renderSystemSettings(
     logBox.scrollTop = logBox.scrollHeight;
   };
 
+  const loadRemoteSettings = async () => {
+    try {
+      const { settings } = await getSettings();
+      publicUrlEl.value = settings.publicBaseUrl || "";
+      hostPathEl.value = settings.hostPath || "";
+      tunnelHint.textContent = `Tunnel 服務位址：${settings.tunnelServiceUrl}`;
+      envHint.textContent = settings.envFileWritable
+        ? "儲存後會同步寫入 .env"
+        : "無法寫入 .env（仍會存進資料庫，重啟後以資料庫為準）";
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), "error");
+    }
+  };
+
   const refreshVersion = async () => {
     try {
       const v = await getVersion();
       enableWebUpdate = v.enableWebUpdate;
       verLine.textContent = `${v.version}  ·  ${v.gitSha}`;
       updateFlag.textContent = enableWebUpdate
-        ? "網頁更新：已啟用"
-        : "網頁更新：已停用（ENABLE_WEB_UPDATE=false）";
+        ? "一鍵更新：已啟用"
+        : "一鍵更新：已停用";
       checkBtn.disabled = !enableWebUpdate;
       updateBtn.disabled = !enableWebUpdate;
       paintLog(v.update);
@@ -101,7 +130,7 @@ export async function renderSystemSettings(
             pollTimer = null;
           }
           if (st.status === "success") {
-            toast("更新完成，請重新整理頁面", "ok");
+            toast("更新已送出，請稍候重新整理", "ok");
             updateBtn.disabled = !enableWebUpdate;
           } else if (st.status === "failed") {
             toast(st.error || "更新失敗", "error");
@@ -115,6 +144,20 @@ export async function renderSystemSettings(
     }, 1500);
   };
 
+  remoteForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      await saveSettings({
+        publicBaseUrl: publicUrlEl.value.trim(),
+        hostPath: hostPathEl.value.trim(),
+      });
+      toast("已儲存", "ok");
+      await loadRemoteSettings();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), "error");
+    }
+  });
+
   checkBtn.addEventListener("click", async () => {
     checkBtn.disabled = true;
     checkResult.textContent = "檢查中…";
@@ -125,15 +168,13 @@ export async function renderSystemSettings(
         <div>上游：<span class="mono">${escapeHtml(r.upstream || "—")}</span></div>
         <div>本地：<span class="mono">${escapeHtml(short(r.local))}</span>
           → 遠端：<span class="mono">${escapeHtml(short(r.remote))}</span></div>
-        <div>落後 ${r.behind} 個 commit，超前 ${r.ahead}
-          ${r.dirty ? " · 工作目錄有未提交變更" : ""}</div>
-        ${r.remoteMessage ? `<div class="muted">遠端訊息：${escapeHtml(r.remoteMessage)}</div>` : ""}
+        <div>落後 ${r.behind} · 超前 ${r.ahead}${r.dirty ? " · 有本地變更" : ""}</div>
         <div style="margin-top:0.35rem"><strong>${
           r.updateAvailable ? "有可用更新" : "已是最新"
         }</strong></div>
       `;
       updateBtn.disabled = !enableWebUpdate || r.dirty;
-      if (r.dirty) toast("工作目錄有本地修改，無法安全自動更新", "error");
+      if (r.dirty) toast("工作目錄有本地修改", "error");
     } catch (e) {
       checkResult.textContent = "";
       toast(e instanceof Error ? e.message : String(e), "error");
@@ -144,7 +185,7 @@ export async function renderSystemSettings(
 
   updateBtn.addEventListener("click", async () => {
     const ok = confirm(
-      "確定要更新並重啟服務嗎？\n\n將執行 git pull --ff-only 與 docker compose build/up。\n畫面可能中斷約 1～數分鐘。data/ 與 .env 不會被刪除。",
+      "確定更新？將 git pull 並重建容器，約 1～數分鐘。data 不會刪除。",
     );
     if (!ok) return;
     updateBtn.disabled = true;
@@ -159,7 +200,7 @@ export async function renderSystemSettings(
     }
   });
 
-  await refreshVersion();
+  await Promise.all([refreshVersion(), loadRemoteSettings()]);
 }
 
 function escapeHtml(s: string): string {

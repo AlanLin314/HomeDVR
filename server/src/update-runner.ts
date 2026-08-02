@@ -123,11 +123,7 @@ export async function startUpdate(): Promise<UpdateJobState> {
   state.exitCode = null;
   state.error = null;
   appendLog("[homedvr] update job started");
-  appendLog(
-    "[homedvr] note: recreate runs in helper container so this process can exit cleanly",
-  );
 
-  // Fire and forget — status polled via GET
   void (async () => {
     try {
       const { code } = await runScript(config.updateScript);
@@ -135,8 +131,7 @@ export async function startUpdate(): Promise<UpdateJobState> {
       state.finishedAt = new Date().toISOString();
       if (code === 0) {
         state.status = "success";
-        appendLog("[homedvr] update script finished (recreate may still be running)");
-        appendLog("[homedvr] wait 1–3 min, then refresh — container restarts mid-update");
+        appendLog("[homedvr] update queued — refresh in 1–3 min");
       } else {
         state.status = "failed";
         state.error = `update script exited with code ${code}`;

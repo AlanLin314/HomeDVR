@@ -6,12 +6,14 @@ import fs from "node:fs";
 import { config } from "./config.js";
 import { initDb, listCameras, updateCameraRow } from "./db.js";
 import { reconcileStreams } from "./go2rtc.js";
+import { loadSettingsFromDb } from "./settings.js";
 import { cameraRoutes } from "./routes/cameras.js";
 import { groupRoutes } from "./routes/groups.js";
 import { systemRoutes } from "./routes/system.js";
 
 async function main() {
   initDb();
+  loadSettingsFromDb();
 
   const app = Fastify({
     logger: true,
