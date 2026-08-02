@@ -1,7 +1,7 @@
 /**
  * go2rtc-compatible live player.
- * Mobile / Safari: prefer HLS first (MSE often fails or hangs).
- * Desktop: MSE then HLS fallback, with connect timeout.
+ * Desktop: MSE first, HLS fallback.
+ * iOS/Safari: HLS first (MSE often unreliable).
  */
 
 export type PlayerStatus = "connecting" | "playing" | "error" | "stopped";
@@ -24,7 +24,7 @@ const CODECS = [
   "opus",
 ];
 
-const CONNECT_TIMEOUT_MS = 10000;
+const CONNECT_TIMEOUT_MS = 12000;
 
 function toWsUrl(path: string): string {
   const abs = new URL(path, window.location.origin);
@@ -39,7 +39,7 @@ function supportedCodecs(): string {
   ).join();
 }
 
-/** iOS / iPadOS / touch Safari: MSE live is unreliable → HLS first */
+/** Only force HLS-first on iOS / pure Safari (desktop Chrome keeps MSE). */
 function preferHlsFirst(): boolean {
   const ua = navigator.userAgent || "";
   const iOS =
@@ -47,12 +47,7 @@ function preferHlsFirst(): boolean {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const safari =
     /Safari/i.test(ua) && !/Chrome|Chromium|Edg|Firefox|Android/i.test(ua);
-  const noMse = !("MediaSource" in window);
-  const coarse =
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(pointer: coarse)").matches;
-  // Phones often better with HLS through go2rtc
-  return iOS || safari || noMse || (coarse && window.innerWidth < 900);
+  return iOS || safari || !("MediaSource" in window);
 }
 
 function prepVideo(video: HTMLVideoElement): void {
@@ -65,8 +60,11 @@ function prepVideo(video: HTMLVideoElement): void {
   video.setAttribute("webkit-playsinline", "true");
   video.setAttribute("muted", "true");
   video.setAttribute("autoplay", "true");
-  // Helps some mobile browsers keep decoding
-  video.disableRemotePlayback = true;
+  try {
+    video.disableRemotePlayback = true;
+  } catch {
+    /* ignore */
+  }
 }
 
 function tryPlay(video: HTMLVideoElement): void {
@@ -110,7 +108,11 @@ function startMse(
       objectUrl = null;
     }
     video.removeAttribute("src");
-    video.load();
+    try {
+      video.load();
+    } catch {
+      /* ignore */
+    }
     ms = null;
   };
 
@@ -122,9 +124,7 @@ function startMse(
   }
 
   timer = setTimeout(() => {
-    if (!stopped && !gotPlaying) {
-      onStatus("error", "連線逾時");
-    }
+    if (!stopped && !gotPlaying) onStatus("error", "連線逾時");
   }, CONNECT_TIMEOUT_MS);
 
   try {
@@ -136,13 +136,11 @@ function startMse(
   ws.binaryType = "arraybuffer";
 
   ws.onerror = () => {
-    if (!stopped) onStatus("error", "WebSocket error");
+    if (!stopped && !gotPlaying) onStatus("error", "WebSocket error");
   };
 
   ws.onclose = () => {
-    if (!stopped && !gotPlaying) {
-      onStatus("error", "連線中斷");
-    }
+    if (!stopped && !gotPlaying) onStatus("error", "連線中斷");
   };
 
   ws.onopen = () => {
@@ -270,7 +268,6 @@ function startHls(
   onStatus("connecting");
   prepVideo(video);
 
-  // Absolute URL helps some mobile players
   const url = new URL(hlsPath, window.location.origin).toString();
   video.src = url;
 
@@ -282,7 +279,7 @@ function startHls(
   };
 
   const onError = () => {
-    if (!stopped) onStatus("error", "HLS 播放失敗");
+    if (!stopped && !gotPlaying) onStatus("error", "HLS 播放失敗");
   };
 
   video.addEventListener("playing", markPlaying);
@@ -290,9 +287,7 @@ function startHls(
   video.addEventListener("error", onError);
 
   timer = setTimeout(() => {
-    if (!stopped && !gotPlaying) {
-      onStatus("error", "HLS 連線逾時");
-    }
+    if (!stopped && !gotPlaying) onStatus("error", "HLS 連線逾時");
   }, CONNECT_TIMEOUT_MS);
 
   tryPlay(video);
@@ -304,7 +299,11 @@ function startHls(
     video.removeEventListener("loadeddata", markPlaying);
     video.removeEventListener("error", onError);
     video.removeAttribute("src");
-    video.load();
+    try {
+      video.load();
+    } catch {
+      /* ignore */
+    }
   };
 }
 
@@ -312,8 +311,15 @@ export function createPlayer(
   container: HTMLElement,
   opts: { mse: string; hls: string; name: string },
 ): PlayerHandle {
+  // Keep container as .player-host only — do NOT put .player on it
+  // (absolute .player on host collapses tile height → no video area)
   container.innerHTML = "";
-  container.classList.add("player");
+  container.classList.add("player-host");
+  container.classList.remove("player");
+
+  const root = document.createElement("div");
+  root.className = "player";
+  container.appendChild(root);
 
   const video = document.createElement("video");
   prepVideo(video);
@@ -323,49 +329,50 @@ export function createPlayer(
   badge.className = "player-status";
   badge.textContent = "連線中…";
 
-  container.append(video, badge);
+  root.append(video, badge);
 
   let status: PlayerStatus = "connecting";
   let stop: (() => void) | null = null;
   let triedMse = false;
   let triedHls = false;
+  let fallbackLock = false;
 
   const setStatus = (s: PlayerStatus, err?: string) => {
     status = s;
-    container.dataset.status = s;
+    root.dataset.status = s;
     if (s === "connecting") {
       badge.hidden = false;
       badge.textContent = "連線中…";
-    } else if (s === "playing") {
+      return;
+    }
+    if (s === "playing") {
       badge.hidden = true;
       badge.textContent = "";
-    } else if (s === "error") {
+      return;
+    }
+    if (s === "error") {
       badge.hidden = false;
       badge.textContent = err || "無法載入畫面";
-      // Fallback chain
-      if (!triedHls && (triedMse || preferHlsFirst())) {
-        // if we started with HLS and failed, try MSE once
-        if (preferHlsFirst() && !triedMse && "MediaSource" in window) {
+      if (fallbackLock) return;
+      fallbackLock = true;
+      try {
+        if (!triedHls) {
+          triedHls = true;
+          stop?.();
+          stop = startHls(video, opts.hls, setStatus);
+          return;
+        }
+        if (!triedMse && "MediaSource" in window) {
           triedMse = true;
           stop?.();
           stop = startMse(video, opts.mse, setStatus);
-          return;
         }
+      } finally {
+        // allow next error after a tick so nested start can report
+        setTimeout(() => {
+          fallbackLock = false;
+        }, 0);
       }
-      if (!triedHls) {
-        triedHls = true;
-        stop?.();
-        stop = startHls(video, opts.hls, setStatus);
-        return;
-      }
-      if (!triedMse && "MediaSource" in window) {
-        triedMse = true;
-        stop?.();
-        stop = startMse(video, opts.mse, setStatus);
-      }
-    } else {
-      badge.hidden = false;
-      badge.textContent = "";
     }
   };
 
@@ -373,6 +380,7 @@ export function createPlayer(
     stop?.();
     triedMse = false;
     triedHls = false;
+    fallbackLock = false;
     prepVideo(video);
     if (preferHlsFirst()) {
       triedHls = true;

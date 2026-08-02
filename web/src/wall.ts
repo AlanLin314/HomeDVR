@@ -246,6 +246,7 @@ export async function renderWall(
 
       const playerBox = document.createElement("div");
       playerBox.className = "player-host";
+      // Explicit host — createPlayer must not turn this into position:absolute
       tile.appendChild(playerBox);
 
       // mobile: single tap on tile body expands; desktop: double-click
