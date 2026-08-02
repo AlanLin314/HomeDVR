@@ -48,6 +48,8 @@ cd HomeDVR
 ```bash
 cp .env.example .env
 mkdir -p data
+# go2rtc needs a writable config file (API adds streams into it)
+cp -n go2rtc/go2rtc.example.yaml go2rtc/go2rtc.yaml 2>/dev/null || cp go2rtc/go2rtc.example.yaml go2rtc/go2rtc.yaml
 ```
 
 用編輯器打開 `.env`，至少先確認：
@@ -159,6 +161,7 @@ chmod +x scripts/update.sh
 | 打不開網頁 | `docker compose ps` 是否全 Up；本機防火牆是否擋 8080 |
 | 有格但沒畫面 | 攝影機 RTSP 是否可從主機連；`docker compose logs go2rtc`；先用 VLC 測 RTSP |
 | 新增後同步錯誤 | go2rtc 是否在跑；來源 URL 帳密密碼是否正確 |
+| `read-only file system` / 無法 upsert | `go2rtc` 的 `/config` 必須可寫；不要用 `:ro` 掛載。執行 `docker compose up -d` 套用最新 compose 後再試 |
 | 重建後設定不見 | 是否誤刪 `data/`；是否換了 volume 路徑 |
 
 ```bash

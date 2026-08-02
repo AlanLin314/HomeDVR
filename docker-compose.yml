@@ -2,8 +2,10 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     restart: unless-stopped
+    # Writable config dir required: API stream upsert writes go2rtc.yaml
+    # (single-file :ro mounts cause "read-only file system" on PUT /api/streams)
     volumes:
-      - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
+      - ./go2rtc:/config
     # No public ports — only reachable via Caddy on the compose network
     networks:
       - homedvr
