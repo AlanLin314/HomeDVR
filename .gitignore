@@ -3,9 +3,8 @@ dist/
 data/*
 !data/.gitkeep
 .env
-# go2rtc may rewrite yaml with RTSP credentials when streams are added
-go2rtc/go2rtc.yaml
-!go2rtc/go2rtc.example.yaml
+# Runtime go2rtc config (may contain camera URLs/passwords)
+# Lives under data/go2rtc/ — already covered by data/*
 *.db
 *.db-journal
 *.db-wal

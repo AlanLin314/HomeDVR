@@ -1,12 +1,32 @@
 services:
+  # Ensure go2rtc has a writable config file (API stream updates try to write yaml)
+  go2rtc-init:
+    image: busybox:1.36
+    volumes:
+      - ./data/go2rtc:/config
+      - ./go2rtc/go2rtc.example.yaml:/example/go2rtc.yaml:ro
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /config
+        if [ ! -f /config/go2rtc.yaml ]; then
+          cp /example/go2rtc.yaml /config/go2rtc.yaml
+          echo "created /config/go2rtc.yaml"
+        else
+          echo "config already exists"
+        fi
+        chmod 666 /config/go2rtc.yaml 2>/dev/null || true
+        ls -la /config
+
   go2rtc:
     image: alexxit/go2rtc:latest
     restart: unless-stopped
-    # Writable config dir required: API stream upsert writes go2rtc.yaml
-    # (single-file :ro mounts cause "read-only file system" on PUT /api/streams)
+    depends_on:
+      - go2rtc-init
+    # Writable directory under data/ — never mount yaml as :ro
     volumes:
-      - ./go2rtc:/config
-    # No public ports — only reachable via Caddy on the compose network
+      - ./data/go2rtc:/config
     networks:
       - homedvr
 
@@ -32,7 +52,6 @@ services:
       GIT_SHA: ${GIT_SHA:-dev}
     volumes:
       - ./data:/data
-      # Web update: mount repo + docker socket (see README security notes)
       - .:/repo
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:

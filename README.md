@@ -48,9 +48,11 @@ cd HomeDVR
 ```bash
 cp .env.example .env
 mkdir -p data
-# go2rtc needs a writable config file (API adds streams into it)
-cp -n go2rtc/go2rtc.example.yaml go2rtc/go2rtc.yaml 2>/dev/null || cp go2rtc/go2rtc.example.yaml go2rtc/go2rtc.yaml
+mkdir -p data/go2rtc
 ```
+
+> go2rtc 設定會寫在 **`data/go2rtc/go2rtc.yaml`**（可寫；首次由 compose 自動從範例建立）。  
+> **不要**把 yaml 用 `:ro` 掛進容器，否則新增攝影機會出現 `read-only file system`。
 
 用編輯器打開 `.env`，至少先確認：
 
@@ -161,12 +163,22 @@ chmod +x scripts/update.sh
 | 打不開網頁 | `docker compose ps` 是否全 Up；本機防火牆是否擋 8080 |
 | 有格但沒畫面 | 攝影機 RTSP 是否可從主機連；`docker compose logs go2rtc`；先用 VLC 測 RTSP |
 | 新增後同步錯誤 | go2rtc 是否在跑；來源 URL 帳密密碼是否正確 |
-| `read-only file system` / 無法 upsert | `go2rtc` 的 `/config` 必須可寫；不要用 `:ro` 掛載。執行 `docker compose up -d` 套用最新 compose 後再試 |
+| `read-only file system` / 無法 upsert | 請更新到最新 compose（config 在 `data/go2rtc`，可寫），並 **強制重建 go2rtc**：見下方指令 |
 | 重建後設定不見 | 是否誤刪 `data/`；是否換了 volume 路徑 |
 
 ```bash
 # 測試 API 健康
 curl http://localhost:8080/api/health
+```
+
+**若仍出現 `read-only file system`（舊掛載殘留）：**
+
+```bash
+git pull
+mkdir -p data/go2rtc
+docker compose down
+docker compose up -d --build --force-recreate
+docker compose logs go2rtc-init go2rtc --tail 40
 ```
 
 ---
