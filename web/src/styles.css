@@ -173,10 +173,40 @@ a:hover {
 
 .topbar nav {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.25rem;
   margin-left: auto;
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* Navbar: only the active item is pill-shaped */
+.topbar nav .btn,
+.desktop-nav .btn {
+  border-radius: 8px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-weight: 560;
+  color: var(--text-secondary);
+}
+
+.topbar nav .btn:hover,
+.desktop-nav .btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.topbar nav .btn.active,
+.desktop-nav .btn.active {
+  border-radius: var(--radius-pill);
+  border-color: rgba(91, 157, 255, 0.55);
+  background: rgba(91, 157, 255, 0.2);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  font-weight: 650;
 }
 
 /* Mobile bottom tab bar */
@@ -207,14 +237,15 @@ a:hover {
   justify-content: center;
   gap: 0.15rem;
   padding: 0.45rem 0.25rem;
-  border-radius: var(--radius-md);
+  border-radius: 10px;
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s, color 0.2s, border-radius 0.2s;
   min-height: 48px;
+  background: transparent;
 }
 
 .bottom-nav a .ico {
@@ -225,6 +256,7 @@ a:hover {
 .bottom-nav a.active {
   color: var(--text);
   background: var(--glass-bg-strong);
+  border-radius: var(--radius-pill);
   box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
@@ -416,23 +448,30 @@ a:hover {
   min-height: 0;
 }
 
-/* ── Always-visible toolbar (NOT hover overlay) ── */
+/* Hover strip at top of tile (desktop) — reveals toolbar */
+.tile-top-hit {
+  display: none;
+}
+
+/* ── Tile toolbar: hidden until hover top / focus ── */
 .tile-chrome {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.45rem 0.55rem;
-  background: #152033;
+  background: rgba(12, 18, 28, 0.88);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text);
-  /* Never hide on mobile / non-hover */
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto;
-  z-index: 3;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .tile-chrome .tile-title {
@@ -464,21 +503,68 @@ a:hover {
 
 .tile-actions button {
   appearance: none;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.22);
   color: #fff;
-  border-radius: var(--radius-pill);
+  border-radius: 8px;
   padding: 0.35rem 0.65rem;
   font-size: 0.75rem;
   font-weight: 650;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 36px;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
 }
 
 .tile-actions button:active {
   background: rgba(91, 157, 255, 0.35);
+}
+
+/* Desktop / mouse: hide toolbar until hover near top of tile */
+@media (hover: hover) and (pointer: fine) {
+  .tile-top-hit {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    z-index: 4;
+    /* capture hover without blocking clicks on chrome when shown */
+  }
+
+  .tile-chrome {
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+  }
+
+  /* Hover top band or the chrome itself */
+  .tile:hover .tile-top-hit ~ .tile-chrome,
+  .tile-top-hit:hover ~ .tile-chrome,
+  .tile-chrome:hover,
+  .tile:focus-within .tile-chrome,
+  .tile.expanded .tile-chrome,
+  .tile.show-chrome .tile-chrome {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  /* When chrome visible, extend hit so moving to buttons doesn't hide */
+  .tile:hover .tile-top-hit {
+    height: 72px;
+  }
+}
+
+/* Touch devices: keep toolbar always visible (no reliable hover) */
+@media (hover: none), (pointer: coarse) {
+  .tile-chrome {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    position: absolute;
+  }
 }
 
 /* In-flow video box — must keep height (never position:absolute on host) */

@@ -195,7 +195,17 @@ export async function renderWall(
       tile.dataset.id = cam.id;
       if (expandedId === cam.id) tile.classList.add("expanded");
 
-      // Permanent chrome (always visible — not hover-only overlay)
+      // Video first (full tile), then hover-hit + toolbar overlay on top
+      const playerBox = document.createElement("div");
+      playerBox.className = "player-host";
+      tile.appendChild(playerBox);
+
+      // Invisible band at top — hover here reveals toolbar (desktop)
+      const topHit = document.createElement("div");
+      topHit.className = "tile-top-hit";
+      topHit.setAttribute("aria-hidden", "true");
+      tile.appendChild(topHit);
+
       const chrome = document.createElement("div");
       chrome.className = "tile-chrome";
 
@@ -244,16 +254,20 @@ export async function renderWall(
       chrome.appendChild(actions);
       tile.appendChild(chrome);
 
-      const playerBox = document.createElement("div");
-      playerBox.className = "player-host";
-      // Explicit host — createPlayer must not turn this into position:absolute
-      tile.appendChild(playerBox);
+      // Touch: first tap near top toggles toolbar
+      topHit.addEventListener("click", (e) => {
+        if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+          e.stopPropagation();
+          tile.classList.toggle("show-chrome");
+        }
+      });
 
       // mobile: single tap on tile body expands; desktop: double-click
       if (isMobile()) {
         let lastTap = 0;
         tile.addEventListener("click", (e) => {
-          if ((e.target as HTMLElement).closest(".actions")) return;
+          if ((e.target as HTMLElement).closest(".tile-actions, .tile-chrome, .tile-top-hit"))
+            return;
           const now = Date.now();
           if (now - lastTap < 350) {
             expandedId = expandedId === cam.id ? null : cam.id;
