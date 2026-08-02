@@ -40,7 +40,7 @@ function shell(active: NavKey): {
   root.className = "app-shell";
 
   const bar = document.createElement("header");
-  bar.className = "topbar glass-elevated";
+  bar.className = "topbar";
   bar.innerHTML = `
     <div class="brand">
       <span class="logo" aria-hidden="true">📹</span>
@@ -63,7 +63,7 @@ function shell(active: NavKey): {
   root.appendChild(main);
 
   const bottom = document.createElement("nav");
-  bottom.className = "bottom-nav glass-elevated";
+  bottom.className = "bottom-nav";
   bottom.setAttribute("aria-label", "主導覽");
   bottom.innerHTML = `
     <a href="/" class="nav-link ${active === "wall" ? "active" : ""}">
