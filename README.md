@@ -228,6 +228,26 @@ docker compose --profile tunnel up -d
 | `HOMEDVR_PORT` | 主機對外埠，預設 8080 |
 | `ENABLE_WEB_UPDATE` | 網頁一鍵更新（預設 **true**；掛 docker.sock + 專案目錄） |
 | `HOMEDVR_HOST_PATH` | **主機絕對路徑**（如 `/root/HomeDVR`）。一鍵更新必填，否則會起新容器且 data 是空的 |
+
+### 一鍵更新怎麼運作
+
+1. `homedvr` 內 `git pull`  
+2. 啟動獨立容器 **`homedvr-updater`**（不會在「正在被重啟的自己」裡 recreate）  
+3. updater：`docker compose build` + `up --force-recreate`  
+4. 約 1～3 分鐘後重新整理網頁  
+
+除錯：
+
+```bash
+docker logs -f homedvr-updater
+docker ps -a | grep homedvr
+```
+
+手動同等操作：
+
+```bash
+cd /root/HomeDVR && git pull && docker compose up -d --build --force-recreate
+```
 | `TUNNEL_TOKEN` | 僅 tunnel profile |
 | `PUBLIC_BASE_URL` | 外網網址（文件用） |
 
