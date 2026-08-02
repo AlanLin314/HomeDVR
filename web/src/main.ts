@@ -44,10 +44,6 @@ function shell(active: NavKey): { root: HTMLElement; main: HTMLElement } {
 
   const main = document.createElement("div");
   main.className = "page-main";
-  main.style.flex = "1";
-  main.style.display = "flex";
-  main.style.flexDirection = "column";
-  main.style.minHeight = "0";
   root.appendChild(main);
 
   const bottom = document.createElement("nav");

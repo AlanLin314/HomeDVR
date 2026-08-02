@@ -114,14 +114,14 @@ a:hover {
   max-height: 100dvh;
   max-height: 100svh;
   padding-top: var(--safe-top);
-  /* Leave room for floating bottom nav so last camera is not covered */
-  padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.35rem);
+  /* Leave room for floating bottom nav so last content is not covered */
+  padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.5rem);
   overflow: hidden;
 }
 
 @media (min-width: 769px) {
   .app-shell {
-    padding-bottom: 0;
+    padding-bottom: 0.5rem;
   }
 }
 
@@ -439,22 +439,33 @@ a:hover {
 
 /* ── Wall ────────────────────────────────────────────── */
 
+/* Main content area: always scrollable so long settings pages work */
 .page-main {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
-}
-
-.wall-wrap {
-  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  /* Critical on mobile: scroll through all cameras instead of clipping */
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
+  /* Extra space above bottom nav / safe area */
+  padding-bottom: 1rem;
+}
+
+.page-main.settings {
+  /* form pages need more bottom room so last fields aren't under the nav */
+  padding-bottom: calc(1.5rem + var(--safe-bottom));
+}
+
+.wall-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: auto;
+  /* scroll happens on .page-main, not nested here */
+  overflow: visible;
 }
 
 .wall {
@@ -765,13 +776,21 @@ a:hover {
 .settings {
   max-width: 920px;
   margin: 0 auto;
-  padding: 1rem 1rem 2rem;
+  padding: 1rem 1rem 2.5rem;
   width: 100%;
+  box-sizing: border-box;
 }
 
 @media (min-width: 769px) {
   .settings {
     padding: 1.25rem 1.25rem 3rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .settings {
+    /* last cards clear the floating bottom tab bar */
+    padding-bottom: calc(2rem + var(--bottom-nav-h) + var(--safe-bottom));
   }
 }
 
