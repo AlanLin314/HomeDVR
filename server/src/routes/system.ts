@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { config } from "../config.js";
+import { getLocalGitInfo } from "../git-info.js";
 import { isGo2rtcHealthy } from "../go2rtc.js";
 import { getAppSettings, updateAppSettings } from "../settings.js";
 import {
@@ -12,18 +13,22 @@ import {
 export async function systemRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/health", async () => {
     const go2rtc = await isGo2rtcHealthy();
+    const git = getLocalGitInfo();
     return {
       ok: true,
       go2rtc,
       version: config.appVersion,
-      gitSha: config.gitSha,
+      gitSha: git.shortSha || config.gitSha,
     };
   });
 
   app.get("/api/system/version", async () => {
+    const git = getLocalGitInfo();
     return {
       version: config.appVersion,
-      gitSha: config.gitSha,
+      gitSha: git.shortSha || config.gitSha,
+      gitMessage: git.message,
+      gitDate: git.date || null,
       enableWebUpdate: config.enableWebUpdate,
       publicBaseUrl: config.publicBaseUrl || null,
       update: getUpdateState(),
@@ -67,6 +72,10 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
     try {
       const info = await checkForUpdates();
       const behind = Number(info.behind ?? 0);
+      const remoteCommits = (info.remote_commits ?? "")
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean);
       return {
         local: info.local,
         remote: info.remote,
@@ -74,7 +83,11 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
         behind,
         ahead: Number(info.ahead ?? 0),
         dirty: info.dirty === "1",
+        localMessage: info.local_message ?? "",
+        localDate: info.local_date ?? "",
         remoteMessage: info.remote_message ?? "",
+        remoteDate: info.remote_date ?? "",
+        remoteCommits,
         updateAvailable: behind > 0,
       };
     } catch (e) {

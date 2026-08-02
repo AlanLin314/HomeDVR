@@ -140,6 +140,8 @@ export function getVersion() {
   return request<{
     version: string;
     gitSha: string;
+    gitMessage: string;
+    gitDate: string | null;
     enableWebUpdate: boolean;
     publicBaseUrl: string | null;
     update: UpdateState;
@@ -177,7 +179,11 @@ export function checkUpdate() {
     behind: number;
     ahead: number;
     dirty: boolean;
+    localMessage: string;
+    localDate: string;
     remoteMessage: string;
+    remoteDate: string;
+    remoteCommits: string[];
     updateAvailable: boolean;
   }>("/api/system/update/check");
 }

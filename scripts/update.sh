@@ -77,7 +77,10 @@ else
 fi
 
 NEW_SHA="$(git rev-parse --short HEAD)"
-echo "[update] code at $NEW_SHA"
+NEW_MSG="$(git log -1 --pretty=%s | tr '\n\r' ' ' || true)"
+export GIT_SHA="$NEW_SHA"
+export GIT_MESSAGE="$NEW_MSG"
+echo "[update] code at $NEW_SHA — $NEW_MSG"
 
 # Why a short-lived helper?
 # App code is baked into the image. After git pull we must rebuild the image
@@ -99,12 +102,13 @@ docker run -d \
   -e "HOMEDVR_HOST_PATH=${HOMEDVR_HOST_PATH}" \
   -e "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" \
   -e "GIT_SHA=${NEW_SHA}" \
+  -e "GIT_MESSAGE=${NEW_MSG}" \
   -e "APP_VERSION=${APP_VERSION:-0.1.0}" \
   "$UPDATER_IMAGE" \
   sh -c '
     set -eux
     sleep 2
-    export HOMEDVR_HOST_PATH COMPOSE_PROJECT_NAME GIT_SHA APP_VERSION
+    export HOMEDVR_HOST_PATH COMPOSE_PROJECT_NAME GIT_SHA GIT_MESSAGE APP_VERSION
     # Rebuild image, then restart the same service (compose replaces container if image changed)
     docker compose --project-name "$COMPOSE_PROJECT_NAME" build \
       --build-arg "GIT_SHA=${GIT_SHA}" \

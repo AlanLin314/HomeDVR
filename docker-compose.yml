@@ -36,6 +36,7 @@ services:
       HOMEDVR_HOST_PATH: ${HOMEDVR_HOST_PATH:-}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       GIT_SHA: ${GIT_SHA:-dev}
+      GIT_MESSAGE: ${GIT_MESSAGE:-}
     volumes:
       - ${HOMEDVR_HOST_PATH:-.}/data:/data
       - ${HOMEDVR_HOST_PATH:-.}:/repo

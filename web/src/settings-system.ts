@@ -23,6 +23,7 @@ export async function renderSystemSettings(
     <div class="card glass">
       <h3>目前版本</h3>
       <p id="ver-line" class="mono">載入中…</p>
+      <p id="commit-line" class="commit-message">載入中…</p>
       <p id="update-flag" class="muted"></p>
     </div>
 
@@ -66,6 +67,7 @@ export async function renderSystemSettings(
   `;
 
   const verLine = main.querySelector("#ver-line") as HTMLElement;
+  const commitLine = main.querySelector("#commit-line") as HTMLElement;
   const updateFlag = main.querySelector("#update-flag") as HTMLElement;
   const checkBtn = main.querySelector("#check-btn") as HTMLButtonElement;
   const updateBtn = main.querySelector("#update-btn") as HTMLButtonElement;
@@ -116,21 +118,94 @@ export async function renderSystemSettings(
     }
   });
 
+  const formatDate = (iso: string | null | undefined): string => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    try {
+      return d.toLocaleString("zh-TW", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  const shortSha = (s: string) => (s ? s.slice(0, 8) : "—");
+
   const refreshVersion = async () => {
     try {
       const v = await getVersion();
       enableWebUpdate = v.enableWebUpdate;
       verLine.textContent = `${v.version}  ·  ${v.gitSha}`;
+      // Show GitHub / git commit subject instead of "更新並重啟：已啟用"
+      const msg = (v.gitMessage || "").trim() || "—";
+      const when = formatDate(v.gitDate);
+      commitLine.textContent = when ? `${msg}  ·  ${when}` : msg;
       updateFlag.textContent = enableWebUpdate
-        ? "更新並重啟：已啟用"
-        : "更新並重啟：已停用";
+        ? ""
+        : "一鍵更新已停用（ENABLE_WEB_UPDATE=false）";
       checkBtn.disabled = !enableWebUpdate;
       updateBtn.disabled = !enableWebUpdate;
       paintLog(v.update);
       if (v.update.status === "running") startPolling();
     } catch (e) {
       verLine.textContent = "無法讀取版本";
+      commitLine.textContent = "—";
       toast(e instanceof Error ? e.message : String(e), "error");
+    }
+  };
+
+  /** Paint check-update result: remote GitHub commits front and center */
+  const paintCheckResult = (r: Awaited<ReturnType<typeof checkUpdate>>) => {
+    const commits =
+      r.remoteCommits?.length > 0
+        ? r.remoteCommits
+        : r.remoteMessage
+          ? [`${shortSha(r.remote)} ${r.remoteMessage}`]
+          : [];
+
+    const commitHtml =
+      commits.length > 0
+        ? `<ul class="commit-list">${commits
+            .map((c) => `<li class="mono">${escapeHtml(c)}</li>`)
+            .join("")}</ul>`
+        : `<div class="muted">（無待更新 commit）</div>`;
+
+    checkResult.innerHTML = `
+      <div class="commit-card">
+        <div class="commit-card-title">GitHub 最新 commit</div>
+        <div class="commit-card-body">${escapeHtml(r.remoteMessage || "—")}</div>
+        ${
+          r.remoteDate
+            ? `<div class="muted" style="margin-top:0.25rem">${escapeHtml(formatDate(r.remoteDate))}</div>`
+            : ""
+        }
+      </div>
+      <div style="margin-top:0.65rem">
+        <div class="muted" style="margin-bottom:0.25rem">本地 ${escapeHtml(shortSha(r.local))}
+          → 遠端 ${escapeHtml(shortSha(r.remote))}
+          · 落後 ${r.behind} · 超前 ${r.ahead}${r.dirty ? " · 有本地變更" : ""}
+        </div>
+        ${r.behind > 0 ? `<div style="margin-bottom:0.35rem"><strong>待更新（${r.behind}）</strong></div>${commitHtml}` : ""}
+        <div style="margin-top:0.35rem"><strong>${
+          r.updateAvailable ? "有可用更新" : "已是最新"
+        }</strong></div>
+      </div>
+    `;
+
+    // Also mirror latest remote commit under version card
+    if (r.remoteMessage) {
+      const when = formatDate(r.remoteDate);
+      updateFlag.innerHTML = r.updateAvailable
+        ? `遠端最新：<span class="commit-message">${escapeHtml(r.remoteMessage)}</span>${
+            when ? ` <span class="muted">· ${escapeHtml(when)}</span>` : ""
+          }`
+        : "已與 GitHub 同步";
     }
   };
 
@@ -180,16 +255,7 @@ export async function renderSystemSettings(
     checkResult.textContent = "檢查中…";
     try {
       const r = await checkUpdate();
-      const short = (s: string) => (s ? s.slice(0, 8) : "—");
-      checkResult.innerHTML = `
-        <div>上游：<span class="mono">${escapeHtml(r.upstream || "—")}</span></div>
-        <div>本地：<span class="mono">${escapeHtml(short(r.local))}</span>
-          → 遠端：<span class="mono">${escapeHtml(short(r.remote))}</span></div>
-        <div>落後 ${r.behind} · 超前 ${r.ahead}${r.dirty ? " · 有本地變更" : ""}</div>
-        <div style="margin-top:0.35rem"><strong>${
-          r.updateAvailable ? "有可用更新" : "已是最新"
-        }</strong></div>
-      `;
+      paintCheckResult(r);
       updateBtn.disabled = !enableWebUpdate || r.dirty;
       if (r.dirty) toast("工作目錄有本地修改", "error");
     } catch (e) {
@@ -218,6 +284,17 @@ export async function renderSystemSettings(
   });
 
   await Promise.all([refreshVersion(), loadRemoteSettings()]);
+
+  // Auto-check GitHub so the page shows latest commit message without an extra click
+  if (enableWebUpdate) {
+    try {
+      const r = await checkUpdate();
+      paintCheckResult(r);
+      updateBtn.disabled = !enableWebUpdate || r.dirty;
+    } catch {
+      /* ignore — version line already has local commit */
+    }
+  }
 }
 
 function escapeHtml(s: string): string {

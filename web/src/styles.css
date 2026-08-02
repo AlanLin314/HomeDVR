@@ -1244,6 +1244,54 @@ select:focus {
   font-size: 0.78rem;
 }
 
+/* GitHub / git commit message under version */
+.commit-message {
+  margin: 0.35rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.commit-card {
+  margin-top: 0.35rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+
+.commit-card-title {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.commit-card-body {
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.commit-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.15rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.commit-list li {
+  margin: 0.15rem 0;
+  word-break: break-word;
+}
+
 /* long URLs — single line clip (do NOT set display:block on table cells) */
 .truncate-url {
   overflow: hidden;
