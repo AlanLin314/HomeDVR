@@ -678,6 +678,34 @@ a:hover {
   color: #1c1408;
 }
 
+/* Main / sub stream picker */
+.stream-pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.75rem 0.55rem;
+}
+
+.stream-pick-label {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--muted);
+  margin-right: 0.15rem;
+}
+
+.stream-pick-btn {
+  min-height: 32px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.stream-pick-hint {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  max-width: 100%;
+}
+
 .chip-bar::-webkit-scrollbar {
   display: none;
 }

@@ -8,8 +8,30 @@ import {
 } from "./wall-perf";
 
 const FILTER_KEY = "homedvr.wallGroupFilter";
+const STREAM_PICK_KEY = "homedvr.wallStreamPick";
 
 type Filter = "all" | "ungrouped" | string; // string = group id
+/** Manual main/sub stream selection for multi-view wall */
+type StreamPick = "main" | "sub";
+
+function loadStreamPick(): StreamPick {
+  try {
+    const v = localStorage.getItem(STREAM_PICK_KEY);
+    if (v === "main" || v === "sub") return v;
+  } catch {
+    /* ignore */
+  }
+  // Default sub (副碼流) — same idea as NVR multi-view
+  return "sub";
+}
+
+function saveStreamPick(p: StreamPick) {
+  try {
+    localStorage.setItem(STREAM_PICK_KEY, p);
+  } catch {
+    /* ignore */
+  }
+}
 
 /**
  * Grid columns by viewport width + camera count.
@@ -106,9 +128,11 @@ export async function renderWall(
   let allCameras: Camera[] = [];
   let groups: Group[] = [];
   let filter: Filter = loadFilter();
+  let streamPick: StreamPick = loadStreamPick();
   let expandedId: string | null = null;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
   let qualityBadge: HTMLElement | null = null;
+  let streamPickBar: HTMLElement | null = null;
   let lastToastTier = 0;
 
   const perf = createPerfController();
@@ -127,13 +151,58 @@ export async function renderWall(
       "已自動降載以維持多路可看。此分頁內不會自動升回高畫質（升回常又看不到）。重新整理後仍沿用；要重置請關閉分頁再開。";
   };
 
-  /** Apply quality ladder (full → SD → 10fps → snapshot) to every player */
+  const paintStreamPickBar = () => {
+    if (!streamPickBar) return;
+    const hasAnySub = allCameras.some((c) => c.hasWallSource);
+    streamPickBar.innerHTML = `
+      <span class="stream-pick-label">碼流</span>
+      <button type="button" class="chip stream-pick-btn ${streamPick === "sub" ? "active" : ""}" data-pick="sub" title="副碼流／牆面流（多畫面較輕）">副碼流</button>
+      <button type="button" class="chip stream-pick-btn ${streamPick === "main" ? "active" : ""}" data-pick="main" title="主碼流（畫質高、多路較吃資源）">主碼流</button>
+      ${
+        !hasAnySub
+          ? `<span class="stream-pick-hint muted">未設定副碼流時兩者相同，請在攝影機編輯填「牆面子碼流」</span>`
+          : ""
+      }
+    `;
+    streamPickBar.querySelectorAll("[data-pick]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const p = (btn as HTMLElement).dataset.pick as StreamPick;
+        if (p !== "main" && p !== "sub") return;
+        if (p === streamPick) return;
+        streamPick = p;
+        saveStreamPick(p);
+        paintStreamPickBar();
+        // Restart all tiles on the chosen stream
+        for (const [id, handle] of players) {
+          const isExpanded = expandedId === id;
+          handle.setPlayMode(isExpanded ? "live" : quality.mode, {
+            intervalMs: quality.intervalMs || 1000,
+            variant: quality.variant,
+            streamPick,
+            forceLive: isExpanded,
+          });
+          if (handle.isActive() || !isConstrainedDevice() || isExpanded) {
+            handle.start();
+          }
+        }
+        toast(
+          p === "main"
+            ? "已切換主碼流（畫質高，多路較吃力）"
+            : "已切換副碼流（多畫面較順）",
+          "ok",
+        );
+      });
+    });
+  };
+
+  /** Apply quality ladder + main/sub pick to every player */
   const applyQualityToPlayers = () => {
     for (const [id, handle] of players) {
       const isExpanded = expandedId === id;
       handle.setPlayMode(quality.mode, {
         intervalMs: quality.intervalMs || 1000,
         variant: quality.variant,
+        streamPick,
         forceLive: isExpanded,
       });
     }
@@ -226,11 +295,17 @@ export async function renderWall(
   qualityBadge.hidden = true;
   chipBar.appendChild(qualityBadge);
 
+  streamPickBar = document.createElement("div");
+  streamPickBar.className = "stream-pick-bar";
+  streamPickBar.setAttribute("role", "group");
+  streamPickBar.setAttribute("aria-label", "主副碼流切換");
+
   const wall = document.createElement("div");
   wall.className = "wall";
 
-  wrap.append(chipBar, wall);
+  wrap.append(chipBar, streamPickBar, wall);
   main.appendChild(wrap);
+  paintStreamPickBar();
 
   const destroyAll = () => {
     streamObserver?.disconnect();
@@ -251,6 +326,7 @@ export async function renderWall(
         if (id === expandedId) {
           handle.setPlayMode("live", {
             variant: "full",
+            streamPick: "main",
             forceLive: true,
           });
           handle.start();
@@ -262,10 +338,11 @@ export async function renderWall(
     }
 
     if (!isConstrainedDevice()) {
-      for (const [id, handle] of players) {
+      for (const [, handle] of players) {
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
           variant: quality.variant,
+          streamPick,
           forceLive: false,
         });
         handle.start();
@@ -288,6 +365,7 @@ export async function renderWall(
       handle.setPlayMode(quality.mode, {
         intervalMs: quality.intervalMs || 1000,
         variant: quality.variant,
+        streamPick,
         forceLive: false,
       });
       if (want.has(id)) {
@@ -319,6 +397,7 @@ export async function renderWall(
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
           variant: quality.variant,
+          streamPick,
           forceLive: false,
         });
         handle.start();
@@ -337,6 +416,7 @@ export async function renderWall(
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
           variant: quality.variant,
+          streamPick,
           forceLive: false,
         });
         if (n < max) {
@@ -631,10 +711,11 @@ export async function renderWall(
       handle.setPlayMode(
         expandedId ? "live" : quality.mode,
         expandedId === cam.id
-          ? { variant: "full", forceLive: true }
+          ? { variant: "full", streamPick: "main", forceLive: true }
           : {
               intervalMs: quality.intervalMs || 1000,
               variant: quality.variant,
+              streamPick,
               forceLive: false,
             },
       );
@@ -643,6 +724,7 @@ export async function renderWall(
 
     perf.setCameraCount(cameras.length);
     paintQualityBadge();
+    paintStreamPickBar();
     setupStreamObserver();
   };
 

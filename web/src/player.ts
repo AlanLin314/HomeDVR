@@ -35,15 +35,18 @@ export interface PlayerHandle {
   /**
    * live = video decode (variant selects full / SD / 10fps URLs).
    * snapshot = poll JPEG (intervalMs), last resort when GPU still overloaded.
-   * forceLive: expanded tile always uses full quality live.
+   * forceLive / streamPick "main": main stream (主碼流).
+   * streamPick "sub": wall/sub stream (副碼流) + optional economy variant.
    */
   setPlayMode: (
     mode: PlayMode,
     opts?: {
       intervalMs?: number;
       forceLive?: boolean;
-      /** full | sd | fps10 — which go2rtc alias to play */
+      /** full | sd | fps10 — economy ladder on top of sub stream */
       variant?: "full" | "sd" | "fps10";
+      /** main = 主碼流, sub = 副碼流/牆面流 */
+      streamPick?: "main" | "sub";
     },
   ) => void;
   getPlayMode: () => PlayMode;
@@ -51,6 +54,7 @@ export interface PlayerHandle {
 }
 
 export type StreamVariant = "full" | "sd" | "fps10";
+export type StreamPick = "main" | "sub";
 
 const CODECS = [
   "avc1.640029",
@@ -441,6 +445,7 @@ export function createPlayer(
   let wantLive = false;
   let playMode: PlayMode = "live";
   let streamVariant: StreamVariant = "full";
+  let streamPick: StreamPick = "sub";
   let forceLive = false;
   let snapshotIntervalMs = 1000;
   let snapTimer: ReturnType<typeof setInterval> | null = null;
@@ -453,15 +458,17 @@ export function createPlayer(
 
   const resolveLiveUrls = (
     variant: StreamVariant,
+    pick: StreamPick,
     useHq: boolean,
   ): { mse: string; hls: string } => {
-    // Expanded tile: prefer main HQ stream (NVR main), not wall substream
-    if (useHq) {
+    // Expanded / force main: always 主碼流
+    if (useHq || pick === "main") {
       return {
         mse: opts.mseHq || opts.mse,
         hls: opts.hlsHq || opts.hls,
       };
     }
+    // 副碼流 + economy ladder (sd / 10fps re-encode from wall)
     if (variant === "sd") {
       return {
         mse: opts.mseSd || opts.mse,
@@ -687,8 +694,11 @@ export function createPlayer(
     fallbackLock = false;
     prepVideo(video);
     video.hidden = false;
+    const pick: StreamPick =
+      forceLive || streamPick === "main" ? "main" : "sub";
     const urls = resolveLiveUrls(
       forceLive ? "full" : streamVariant,
+      pick,
       forceLive,
     );
     activeMse = urls.mse;
@@ -752,12 +762,14 @@ export function createPlayer(
       intervalMs?: number;
       forceLive?: boolean;
       variant?: StreamVariant;
+      streamPick?: StreamPick;
     },
   ) => {
     if (destroyed) return;
     const prevForce = forceLive;
     const prevMode = playMode;
     const prevVariant = streamVariant;
+    const prevPick = streamPick;
 
     if (typeof modeOpts?.forceLive === "boolean") {
       forceLive = modeOpts.forceLive;
@@ -768,9 +780,13 @@ export function createPlayer(
     if (modeOpts?.variant) {
       streamVariant = modeOpts.variant;
     }
+    if (modeOpts?.streamPick) {
+      streamPick = modeOpts.streamPick;
+    }
     playMode = mode;
     root.dataset.mode = effectiveMode();
     root.dataset.variant = forceLive ? "full" : streamVariant;
+    root.dataset.stream = forceLive || streamPick === "main" ? "main" : "sub";
 
     if (!wantLive) return;
 
@@ -780,11 +796,12 @@ export function createPlayer(
       return;
     }
 
-    // Live: restart if mode/variant/force changed
+    // Live: restart if mode/variant/force/pick changed
     const needRestart =
       prevMode !== mode ||
       prevVariant !== streamVariant ||
       prevForce !== forceLive ||
+      prevPick !== streamPick ||
       Boolean(snapTimer) ||
       !snapImg.hidden ||
       status === "idle" ||
