@@ -33,17 +33,24 @@ export interface PlayerHandle {
   getStatus: () => PlayerStatus;
   isActive: () => boolean;
   /**
-   * live = full video decode.
-   * snapshot = poll JPEG (intervalMs), frees hardware decoders so all tiles show.
-   * forceLive: ignore wall economy mode (e.g. expanded tile).
+   * live = video decode (variant selects full / SD / 10fps URLs).
+   * snapshot = poll JPEG (intervalMs), last resort when GPU still overloaded.
+   * forceLive: expanded tile always uses full quality live.
    */
   setPlayMode: (
     mode: PlayMode,
-    opts?: { intervalMs?: number; forceLive?: boolean },
+    opts?: {
+      intervalMs?: number;
+      forceLive?: boolean;
+      /** full | sd | fps10 — which go2rtc alias to play */
+      variant?: "full" | "sd" | "fps10";
+    },
   ) => void;
   getPlayMode: () => PlayMode;
   getMetrics: () => PlayerMetrics;
 }
+
+export type StreamVariant = "full" | "sd" | "fps10";
 
 const CODECS = [
   "avc1.640029",
@@ -381,7 +388,13 @@ export function createPlayer(
     mse: string;
     hls: string;
     name: string;
-    /** go2rtc JPEG frame URL for low-FPS economy mode */
+    /** Low-res live (lighter decode) */
+    mseSd?: string;
+    hlsSd?: string;
+    /** ~10 FPS live */
+    mse10?: string;
+    hls10?: string;
+    /** go2rtc JPEG frame URL for last-resort preview */
     snapshot?: string;
     /** Default true. Wall sets false and starts only when tile is on-screen. */
     autoStart?: boolean;
@@ -423,16 +436,38 @@ export function createPlayer(
   /** User/wall wants this tile on — keep auto-retrying on failure. */
   let wantLive = false;
   let playMode: PlayMode = "live";
+  let streamVariant: StreamVariant = "full";
   let forceLive = false;
   let snapshotIntervalMs = 1000;
   let snapTimer: ReturnType<typeof setInterval> | null = null;
   let snapInFlight = false;
   let baselineDropped = 0;
   let baselineDecoded = 0;
+  /** Currently connected live URLs (change when variant switches) */
+  let activeMse = opts.mse;
+  let activeHls = opts.hls;
+
+  const resolveLiveUrls = (
+    variant: StreamVariant,
+  ): { mse: string; hls: string } => {
+    if (variant === "sd") {
+      return {
+        mse: opts.mseSd || opts.mse,
+        hls: opts.hlsSd || opts.hls,
+      };
+    }
+    if (variant === "fps10") {
+      return {
+        mse: opts.mse10 || opts.mseSd || opts.mse,
+        hls: opts.hls10 || opts.hlsSd || opts.hls,
+      };
+    }
+    return { mse: opts.mse, hls: opts.hls };
+  };
 
   const snapshotUrl = (): string => {
     if (opts.snapshot) return opts.snapshot;
-    // Derive from mse ?src=
+    // Derive from full mse ?src=
     try {
       const u = new URL(opts.mse, window.location.origin);
       const src = u.searchParams.get("src");
@@ -550,13 +585,13 @@ export function createPlayer(
         if (!triedHls) {
           triedHls = true;
           stopStream?.();
-          stopStream = startHls(video, opts.hls, setStatus);
+          stopStream = startHls(video, activeHls, setStatus);
           return;
         }
         if (!triedMse && "MediaSource" in window) {
           triedMse = true;
           stopStream?.();
-          stopStream = startMse(video, opts.mse, setStatus);
+          stopStream = startMse(video, activeMse, setStatus);
           return;
         }
         scheduleAutoRetry(err);
@@ -620,13 +655,17 @@ export function createPlayer(
     snapTimer = setInterval(pullSnapshot, ms);
   };
 
-  const startLive = () => {
+  const startLive = (forceRestart = false) => {
     stopSnapshot();
     root.dataset.mode = "live";
-    // Already connecting / playing — skip re-connect thrash
-    if (status === "connecting" || status === "playing") {
-      // Only if we were already live
-      if (stopStream) return;
+    root.dataset.variant = forceLive ? "full" : streamVariant;
+    // Already connecting / playing same stream — skip re-connect thrash
+    if (
+      !forceRestart &&
+      (status === "connecting" || status === "playing") &&
+      stopStream
+    ) {
+      return;
     }
     clearAutoRetry();
     stopStream?.();
@@ -636,15 +675,18 @@ export function createPlayer(
     fallbackLock = false;
     prepVideo(video);
     video.hidden = false;
+    const urls = resolveLiveUrls(forceLive ? "full" : streamVariant);
+    activeMse = urls.mse;
+    activeHls = urls.hls;
     const stats = readFrameStats();
     baselineDropped = stats.dropped;
     baselineDecoded = stats.total;
     if (preferHlsFirst()) {
       triedHls = true;
-      stopStream = startHls(video, opts.hls, setStatus);
+      stopStream = startHls(video, activeHls, setStatus);
     } else {
       triedMse = true;
-      stopStream = startMse(video, opts.mse, setStatus);
+      stopStream = startMse(video, activeMse, setStatus);
     }
   };
 
@@ -660,7 +702,7 @@ export function createPlayer(
       return;
     }
     if (status === "connecting" || status === "playing") return;
-    startLive();
+    startLive(false);
   };
 
   const stop = () => {
@@ -691,31 +733,53 @@ export function createPlayer(
 
   const setPlayMode = (
     mode: PlayMode,
-    modeOpts?: { intervalMs?: number; forceLive?: boolean },
+    modeOpts?: {
+      intervalMs?: number;
+      forceLive?: boolean;
+      variant?: StreamVariant;
+    },
   ) => {
     if (destroyed) return;
+    const prevForce = forceLive;
+    const prevMode = playMode;
+    const prevVariant = streamVariant;
+
     if (typeof modeOpts?.forceLive === "boolean") {
       forceLive = modeOpts.forceLive;
     }
     if (modeOpts?.intervalMs != null && modeOpts.intervalMs > 0) {
       snapshotIntervalMs = modeOpts.intervalMs;
     }
+    if (modeOpts?.variant) {
+      streamVariant = modeOpts.variant;
+    }
     playMode = mode;
     root.dataset.mode = effectiveMode();
+    root.dataset.variant = forceLive ? "full" : streamVariant;
 
     if (!wantLive) return;
 
     const next = effectiveMode();
     if (next === "snapshot") {
       startSnapshot();
-    } else {
-      // Switch to live: tear down snapshot and (re)start video
-      const wasSnap = Boolean(snapTimer) || !snapImg.hidden;
-      stopSnapshot();
-      if (wasSnap || status === "idle" || status === "error" || !stopStream) {
-        status = "idle";
-        startLive();
-      }
+      return;
+    }
+
+    // Live: restart if mode/variant/force changed
+    const needRestart =
+      prevMode !== mode ||
+      prevVariant !== streamVariant ||
+      prevForce !== forceLive ||
+      Boolean(snapTimer) ||
+      !snapImg.hidden ||
+      status === "idle" ||
+      status === "error" ||
+      !stopStream;
+
+    stopSnapshot();
+    if (needRestart) {
+      status = "idle";
+      startLive(true);
     }
   };
 

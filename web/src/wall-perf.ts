@@ -1,50 +1,69 @@
 /**
- * Adaptive wall performance.
+ * Adaptive wall performance (stepped quality ladder).
  *
- * Weak GPUs cannot decode many H.264 streams at once. We sample dropped
- * frames / page jank and automatically step down to JPEG snapshot refresh
- * (low FPS) so every camera tile stays visible.
+ * Order when overloaded:
+ *   0 full live  →  1 low-res live  →  2 ~10 FPS live  →  3 JPEG 2fps  →  4 JPEG 1fps
+ *
+ * High-res streams are reduced first so every camera can stay visible
+ * without jumping straight to snapshot mode.
  */
 
-export type QualityTier = 0 | 1 | 2 | 3;
-/** 0 = full live video; 1–3 = snapshot at decreasing FPS */
+export type QualityTier = 0 | 1 | 2 | 3 | 4;
+
+/** Which live stream URL set the player should use */
+export type StreamVariant = "full" | "sd" | "fps10";
 
 export interface QualityInfo {
   tier: QualityTier;
   mode: "live" | "snapshot";
-  /** Target snapshot interval; 0 when live */
+  variant: StreamVariant;
+  /** Snapshot poll interval; 0 when live */
   intervalMs: number;
-  /** Rough FPS label for UI */
   label: string;
+  /** Approximate FPS (0 = source fps for full/sd) */
   fps: number;
 }
 
-const TIER_INTERVAL_MS: Record<QualityTier, number> = {
-  0: 0,
-  1: 500, // ~2 fps
-  2: 1000, // ~1 fps
-  3: 2000, // ~0.5 fps
+const TIERS: Record<QualityTier, Omit<QualityInfo, "tier">> = {
+  0: {
+    mode: "live",
+    variant: "full",
+    intervalMs: 0,
+    label: "原畫質",
+    fps: 0,
+  },
+  1: {
+    mode: "live",
+    variant: "sd",
+    intervalMs: 0,
+    label: "低畫質",
+    fps: 0,
+  },
+  2: {
+    mode: "live",
+    variant: "fps10",
+    intervalMs: 0,
+    label: "10 FPS",
+    fps: 10,
+  },
+  3: {
+    mode: "snapshot",
+    variant: "full",
+    intervalMs: 500,
+    label: "預覽 2 FPS",
+    fps: 2,
+  },
+  4: {
+    mode: "snapshot",
+    variant: "full",
+    intervalMs: 1000,
+    label: "預覽 1 FPS",
+    fps: 1,
+  },
 };
 
 export function qualityInfo(tier: QualityTier): QualityInfo {
-  const intervalMs = TIER_INTERVAL_MS[tier];
-  if (tier === 0) {
-    return {
-      tier,
-      mode: "live",
-      intervalMs: 0,
-      label: "即時串流",
-      fps: 0,
-    };
-  }
-  const fps = Math.round((1000 / intervalMs) * 10) / 10;
-  return {
-    tier,
-    mode: "snapshot",
-    intervalMs,
-    label: `低幀預覽 ${fps} FPS`,
-    fps,
-  };
+  return { tier, ...TIERS[tier] };
 }
 
 export interface PlayerMetricsSample {
@@ -58,9 +77,7 @@ export interface PlayerMetricsSample {
 export interface PerfController {
   getTier: () => QualityTier;
   getInfo: () => QualityInfo;
-  /** Call after paint / when camera count changes */
   setCameraCount: (n: number) => void;
-  /** Feed latest metrics from active players */
   sample: (metrics: PlayerMetricsSample[]) => void;
   destroy: () => void;
   onChange: (cb: (info: QualityInfo, reason: string) => void) => void;
@@ -71,7 +88,7 @@ function navDeviceMemory(): number | undefined {
   return typeof n === "number" ? n : undefined;
 }
 
-/** Heuristic: weak machine likely to struggle with multi-stream decode */
+/** Heuristic: weak machine likely to struggle with multi full-res decode */
 export function estimateWeakGpu(cameraCount: number): boolean {
   const mem = navDeviceMemory();
   const cores = navigator.hardwareConcurrency || 4;
@@ -92,14 +109,13 @@ export function createPerfController(): PerfController {
   let lastChangeAt = 0;
   let destroyed = false;
 
-  // rAF jank sampling
   let longFrames = 0;
   let frameSamples = 0;
   let lastRaf = 0;
   let rafId = 0;
 
-  const COOLDOWN_MS = 12_000;
-  const SAMPLE_MS = 2200;
+  const COOLDOWN_MS = 10_000;
+  const MAX_TIER = 4 as QualityTier;
 
   const notify = (reason: string) => {
     const info = qualityInfo(tier);
@@ -108,10 +124,12 @@ export function createPerfController(): PerfController {
 
   const setTier = (next: QualityTier, reason: string) => {
     if (next === tier) return;
+    if (next < 0) next = 0;
+    if (next > MAX_TIER) next = MAX_TIER;
     const now = Date.now();
-    // Always allow first degrade quickly; upgrades respect cooldown
-    if (next < tier && now - lastChangeAt < COOLDOWN_MS) return;
-    if (next > tier && now - lastChangeAt < COOLDOWN_MS * 1.5) return;
+    // Degrade can happen after short cooldown; upgrade is slower
+    if (next > tier && now - lastChangeAt < COOLDOWN_MS) return;
+    if (next < tier && now - lastChangeAt < COOLDOWN_MS * 1.6) return;
     tier = next;
     lastChangeAt = now;
     goodTicks = 0;
@@ -124,7 +142,6 @@ export function createPerfController(): PerfController {
     if (lastRaf) {
       const dt = t - lastRaf;
       frameSamples += 1;
-      // > 40ms ≈ below 25fps main thread
       if (dt > 40) longFrames += 1;
     }
     lastRaf = t;
@@ -132,19 +149,14 @@ export function createPerfController(): PerfController {
   };
   rafId = requestAnimationFrame(loopRaf);
 
-  const timer = window.setInterval(() => {
-    if (destroyed) return;
-    // Jank ratio for this window is applied in sample()
-  }, SAMPLE_MS);
-
   return {
     getTier: () => tier,
     getInfo: () => qualityInfo(tier),
     setCameraCount: (n: number) => {
       cameraCount = n;
-      // Proactive: many cameras on weak hardware → start snapshot
+      // Proactive: weak hardware → start at low-res live (not snapshot)
       if (tier === 0 && estimateWeakGpu(n)) {
-        setTier(1, "偵測到硬體較弱／路數多，先用低幀預覽");
+        setTier(1, "偵測到硬體較弱／路數多，先降畫質");
       }
     },
     sample: (metrics: PlayerMetricsSample[]) => {
@@ -165,10 +177,8 @@ export function createPerfController(): PerfController {
       active.forEach((m, i) => {
         const key = String(i);
         const prev = lastDrop.get(key) || { dropped: 0, total: 0 };
-        const dDrop = Math.max(0, m.droppedFrames - prev.dropped);
-        const dTot = Math.max(0, m.totalFrames - prev.total);
-        droppedDelta += dDrop;
-        totalDelta += dTot;
+        droppedDelta += Math.max(0, m.droppedFrames - prev.dropped);
+        totalDelta += Math.max(0, m.totalFrames - prev.total);
         lastDrop.set(key, {
           dropped: m.droppedFrames,
           total: m.totalFrames,
@@ -182,8 +192,7 @@ export function createPerfController(): PerfController {
       });
 
       const dropRate = totalDelta > 8 ? droppedDelta / totalDelta : 0;
-      const jankRate =
-        frameSamples > 10 ? longFrames / frameSamples : 0;
+      const jankRate = frameSamples > 10 ? longFrames / frameSamples : 0;
       longFrames = 0;
       frameSamples = 0;
 
@@ -193,62 +202,48 @@ export function createPerfController(): PerfController {
           ? (liveErrors + Math.max(0, liveConnecting - 1)) / liveActive
           : 0;
 
-      // Stress score
       const stressed =
         dropRate > 0.12 ||
         jankRate > 0.35 ||
         failRatio > 0.35 ||
-        (livePlaying === 0 && liveActive >= 3 && liveErrors + liveConnecting >= 2);
+        (livePlaying === 0 &&
+          liveActive >= 3 &&
+          liveErrors + liveConnecting >= 2);
 
-      if (tier === 0) {
-        if (stressed) {
-          badTicks += 1;
-          goodTicks = 0;
-          if (badTicks >= 2) {
-            setTier(1, "解碼過載，自動改為低幀預覽（全部可見）");
-          }
-        } else {
-          badTicks = 0;
-          goodTicks += 1;
+      if (stressed) {
+        badTicks += 1;
+        goodTicks = 0;
+        if (badTicks >= 2 && tier < MAX_TIER) {
+          const next = (tier + 1) as QualityTier;
+          const labels: Record<QualityTier, string> = {
+            0: "原畫質",
+            1: "先降畫質（低解析度）",
+            2: "再降到 10 FPS",
+            3: "改為預覽 2 FPS",
+            4: "再降到預覽 1 FPS",
+          };
+          setTier(next, `解碼過載，${labels[next]}`);
         }
         return;
       }
 
-      // Already in snapshot tiers
-      if (stressed || jankRate > 0.45) {
-        badTicks += 1;
-        goodTicks = 0;
-        if (badTicks >= 2 && tier < 3) {
-          setTier(
-            (tier + 1) as QualityTier,
-            `仍吃力，再降到 ${qualityInfo((tier + 1) as QualityTier).label}`,
-          );
+      badTicks = 0;
+      goodTicks += 1;
+
+      // Recover one step at a time when stable
+      if (goodTicks >= 8 && tier > 0) {
+        const prev = (tier - 1) as QualityTier;
+        // From SD back to full: require longer calm on weak machines
+        if (tier === 1 && estimateWeakGpu(cameraCount) && goodTicks < 14) {
+          return;
         }
-      } else {
-        badTicks = 0;
-        goodTicks += 1;
-        // Recover gradually when stable
-        if (goodTicks >= 8 && tier > 0) {
-          // Only try live if camera count is modest or we were at tier 1
-          if (tier === 1 && !estimateWeakGpu(cameraCount)) {
-            setTier(0, "效能回穩，恢復即時串流");
-          } else if (tier > 1) {
-            setTier(
-              (tier - 1) as QualityTier,
-              `效能回穩，提升到 ${qualityInfo((tier - 1) as QualityTier).label}`,
-            );
-          } else if (tier === 1 && goodTicks >= 16) {
-            // Cautious live retry even on weak machines after long calm
-            setTier(0, "嘗試恢復即時串流");
-          }
-        }
+        setTier(prev, `效能回穩，提升到 ${qualityInfo(prev).label}`);
       }
     },
     destroy: () => {
       destroyed = true;
       listeners = [];
       if (rafId) cancelAnimationFrame(rafId);
-      clearInterval(timer);
     },
     onChange: (cb) => {
       listeners.push(cb);

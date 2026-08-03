@@ -58,11 +58,17 @@ export function maskSource(source: string): string {
 }
 
 function streamPaths(id: string): CameraPublic["stream"] {
-  const src = encodeURIComponent(id);
+  const full = encodeURIComponent(id);
+  const sd = encodeURIComponent(`${id}__sd`);
+  const fps10 = encodeURIComponent(`${id}__10`);
   return {
-    mse: `/go2rtc/api/ws?src=${src}`,
-    hls: `/go2rtc/api/stream.m3u8?src=${src}`,
-    snapshot: `/go2rtc/api/frame.jpeg?src=${src}`,
+    mse: `/go2rtc/api/ws?src=${full}`,
+    hls: `/go2rtc/api/stream.m3u8?src=${full}`,
+    mseSd: `/go2rtc/api/ws?src=${sd}`,
+    hlsSd: `/go2rtc/api/stream.m3u8?src=${sd}`,
+    mse10: `/go2rtc/api/ws?src=${fps10}`,
+    hls10: `/go2rtc/api/stream.m3u8?src=${fps10}`,
+    snapshot: `/go2rtc/api/frame.jpeg?src=${full}`,
   };
 }
 

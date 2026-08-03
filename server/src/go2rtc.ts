@@ -38,20 +38,21 @@ async function streamExists(id: string): Promise<boolean> {
   }
 }
 
-/**
- * Register or replace a stream in go2rtc (in-memory).
- * go2rtc may try to persist to go2rtc.yaml; if the file is read-only it
- * often still keeps the stream in memory but returns 400 — we treat that
- * as success when the stream is actually registered (HomeDVR re-syncs on boot).
- */
-export async function upsertStream(
-  id: string,
-  source: string,
-): Promise<void> {
-  // Remove first so source URL changes are applied cleanly
-  await removeStream(id).catch(() => undefined);
+/** Wall / economy aliases derived from a camera id */
+export function streamAliasIds(id: string): {
+  full: string;
+  sd: string;
+  fps10: string;
+} {
+  return {
+    full: id,
+    sd: `${id}__sd`,
+    fps10: `${id}__10`,
+  };
+}
 
-  const params = new URLSearchParams({ name: id, src: source });
+async function putStream(name: string, src: string): Promise<void> {
+  const params = new URLSearchParams({ name, src });
   const res = await go2rtcFetch(`/api/streams?${params.toString()}`, {
     method: "PUT",
   });
@@ -61,9 +62,9 @@ export async function upsertStream(
 
   // Stream often still registered when config write fails
   if (isReadOnlyConfigError(res.status, body)) {
-    if (await streamExists(id)) {
+    if (await streamExists(name)) {
       console.warn(
-        `[go2rtc] stream "${id}" registered in memory but config file is not writable: ${body}`,
+        `[go2rtc] stream "${name}" registered in memory but config file is not writable: ${body}`,
       );
       return;
     }
@@ -74,9 +75,8 @@ export async function upsertStream(
   );
 }
 
-/** Remove a stream from go2rtc */
-export async function removeStream(id: string): Promise<void> {
-  const params = new URLSearchParams({ src: id });
+async function deleteStreamName(name: string): Promise<void> {
+  const params = new URLSearchParams({ src: name });
   const res = await go2rtcFetch(`/api/streams?${params.toString()}`, {
     method: "DELETE",
   });
@@ -91,6 +91,68 @@ export async function removeStream(id: string): Promise<void> {
   throw new Error(
     `go2rtc remove failed (${res.status}): ${body || res.statusText}`,
   );
+}
+
+/**
+ * Register primary RTSP + wall economy variants in go2rtc.
+ * - full: original source
+ * - __sd: lower resolution (lighter client decode)
+ * - __10: ~10 FPS + lower resolution
+ *
+ * Variants use `ffmpeg:{id}#...` so go2rtc reuses the primary RTSP pull.
+ */
+export async function upsertStream(
+  id: string,
+  source: string,
+): Promise<void> {
+  const aliases = streamAliasIds(id);
+
+  // Remove first so source URL changes are applied cleanly
+  await removeStream(id).catch(() => undefined);
+
+  await putStream(aliases.full, source);
+
+  // SD: scale down, keep source frame rate (client GPU-friendly)
+  // 10fps: also cap frame rate for weaker GPUs
+  // Prefer hardware encode when available; fall back to software.
+  const sdHw = `ffmpeg:${aliases.full}#video=h264#hardware#width=854#height=480`;
+  const sdSw = `ffmpeg:${aliases.full}#video=h264#width=854#height=480`;
+  const fps10Hw = `ffmpeg:${aliases.full}#video=h264#hardware#width=640#height=360#raw=-r 10`;
+  const fps10Sw = `ffmpeg:${aliases.full}#video=h264#width=640#height=360#raw=-r 10`;
+
+  try {
+    await putStream(aliases.sd, sdHw);
+  } catch {
+    try {
+      await putStream(aliases.sd, sdSw);
+    } catch (e) {
+      console.warn(
+        `[go2rtc] SD wall stream for "${id}" failed:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
+  try {
+    await putStream(aliases.fps10, fps10Hw);
+  } catch {
+    try {
+      await putStream(aliases.fps10, fps10Sw);
+    } catch (e) {
+      console.warn(
+        `[go2rtc] 10fps wall stream for "${id}" failed:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+}
+
+/** Remove primary + wall aliases from go2rtc */
+export async function removeStream(id: string): Promise<void> {
+  const aliases = streamAliasIds(id);
+  await deleteStreamName(aliases.fps10).catch(() => undefined);
+  await deleteStreamName(aliases.sd).catch(() => undefined);
+  await deleteStreamName(aliases.full);
 }
 
 export async function isGo2rtcHealthy(): Promise<boolean> {

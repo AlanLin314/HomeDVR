@@ -37,9 +37,16 @@ export interface CameraPublic {
   sourceMasked: string;
   syncError: string | null;
   stream: {
+    /** Full quality original stream */
     mse: string;
     hls: string;
-    /** Single JPEG frame (go2rtc) — low-FPS wall preview when GPU is weak */
+    /** Lower resolution live (lighter decode) */
+    mseSd: string;
+    hlsSd: string;
+    /** ~10 FPS + lower resolution live */
+    mse10: string;
+    hls10: string;
+    /** Single JPEG frame — last-resort low-FPS preview */
     snapshot: string;
   };
   createdAt: string;

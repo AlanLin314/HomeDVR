@@ -127,12 +127,13 @@ export async function renderWall(
       "偵測到顯示卡／解碼負載過高，已自動降幀預覽，讓所有攝影機都能顯示。效能回穩後會再嘗試即時串流。";
   };
 
-  /** Apply live vs low-FPS snapshot mode to every player */
+  /** Apply quality ladder (full → SD → 10fps → snapshot) to every player */
   const applyQualityToPlayers = () => {
     for (const [id, handle] of players) {
       const isExpanded = expandedId === id;
       handle.setPlayMode(quality.mode, {
         intervalMs: quality.intervalMs || 1000,
+        variant: quality.variant,
         forceLive: isExpanded,
       });
     }
@@ -245,6 +246,7 @@ export async function renderWall(
       for (const [id, handle] of players) {
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
+          variant: quality.variant,
           forceLive: expandedId === id,
         });
         handle.start();
@@ -252,7 +254,7 @@ export async function renderWall(
       return;
     }
 
-    // Economy snapshot mode: show all visible tiles (JPEG is cheap)
+    // Snapshot is cheap → allow more concurrent tiles; live stays capped
     const max =
       quality.mode === "snapshot"
         ? Math.max(maxConcurrentStreams() * 3, 12)
@@ -273,6 +275,7 @@ export async function renderWall(
     for (const [id, handle] of players) {
       handle.setPlayMode(quality.mode, {
         intervalMs: quality.intervalMs || 1000,
+        variant: quality.variant,
         forceLive: expandedId === id,
       });
       if (want.has(id)) {
@@ -294,6 +297,7 @@ export async function renderWall(
         visibility.set(id, 1);
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
+          variant: quality.variant,
           forceLive: expandedId === id,
         });
         handle.start();
@@ -311,6 +315,7 @@ export async function renderWall(
       for (const [id, handle] of players) {
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
+          variant: quality.variant,
           forceLive: expandedId === id,
         });
         if (n < max) {
@@ -573,11 +578,16 @@ export async function renderWall(
         name: cam.name,
         mse: cam.stream.mse,
         hls: cam.stream.hls,
+        mseSd: cam.stream.mseSd,
+        hlsSd: cam.stream.hlsSd,
+        mse10: cam.stream.mse10,
+        hls10: cam.stream.hls10,
         snapshot: cam.stream.snapshot,
         autoStart: false,
       });
       handle.setPlayMode(quality.mode, {
         intervalMs: quality.intervalMs || 1000,
+        variant: quality.variant,
         forceLive: expandedId === cam.id,
       });
       players.set(cam.id, handle);
