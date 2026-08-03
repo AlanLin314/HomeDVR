@@ -48,10 +48,14 @@ export function initDb(): void {
     );
   `);
 
-  // Migrate: add group_id if missing
+  // Migrate: add columns if missing
   const cols = tableColumns("cameras");
   if (!cols.has("group_id")) {
     db.exec(`ALTER TABLE cameras ADD COLUMN group_id TEXT`);
+  }
+  // Optional substream for multi-view wall (NVR sub / 子碼流)
+  if (!cols.has("wall_source")) {
+    db.exec(`ALTER TABLE cameras ADD COLUMN wall_source TEXT`);
   }
 
   db.exec(`
@@ -174,8 +178,8 @@ export function getCamera(id: string): CameraRow | undefined {
 export function insertCamera(row: CameraRow): void {
   getDb()
     .prepare(
-      `INSERT INTO cameras (id, name, source, enabled, sort_order, group_id, created_at, updated_at, sync_error)
-       VALUES (@id, @name, @source, @enabled, @sort_order, @group_id, @created_at, @updated_at, @sync_error)`,
+      `INSERT INTO cameras (id, name, source, wall_source, enabled, sort_order, group_id, created_at, updated_at, sync_error)
+       VALUES (@id, @name, @source, @wall_source, @enabled, @sort_order, @group_id, @created_at, @updated_at, @sync_error)`,
     )
     .run(row);
 }
@@ -187,6 +191,7 @@ export function updateCameraRow(
       CameraRow,
       | "name"
       | "source"
+      | "wall_source"
       | "enabled"
       | "sort_order"
       | "group_id"

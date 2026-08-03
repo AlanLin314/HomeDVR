@@ -578,6 +578,8 @@ export async function renderWall(
         name: cam.name,
         mse: cam.stream.mse,
         hls: cam.stream.hls,
+        mseHq: cam.stream.mseHq,
+        hlsHq: cam.stream.hlsHq,
         mseSd: cam.stream.mseSd,
         hlsSd: cam.stream.hlsSd,
         mse10: cam.stream.mse10,

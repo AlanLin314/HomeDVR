@@ -385,9 +385,13 @@ function startHls(
 export function createPlayer(
   container: HTMLElement,
   opts: {
+    /** Wall / multi-view stream (often NVR substream) */
     mse: string;
     hls: string;
     name: string;
+    /** Main HQ for expand/fullscreen */
+    mseHq?: string;
+    hlsHq?: string;
     /** Low-res live (lighter decode) */
     mseSd?: string;
     hlsSd?: string;
@@ -449,7 +453,15 @@ export function createPlayer(
 
   const resolveLiveUrls = (
     variant: StreamVariant,
+    useHq: boolean,
   ): { mse: string; hls: string } => {
+    // Expanded tile: prefer main HQ stream (NVR main), not wall substream
+    if (useHq) {
+      return {
+        mse: opts.mseHq || opts.mse,
+        hls: opts.hlsHq || opts.hls,
+      };
+    }
     if (variant === "sd") {
       return {
         mse: opts.mseSd || opts.mse,
@@ -675,7 +687,10 @@ export function createPlayer(
     fallbackLock = false;
     prepVideo(video);
     video.hidden = false;
-    const urls = resolveLiveUrls(forceLive ? "full" : streamVariant);
+    const urls = resolveLiveUrls(
+      forceLive ? "full" : streamVariant,
+      forceLive,
+    );
     activeMse = urls.mse;
     activeHls = urls.hls;
     const stats = readFrameStats();

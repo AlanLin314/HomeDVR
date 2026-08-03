@@ -38,17 +38,36 @@ async function streamExists(id: string): Promise<boolean> {
   }
 }
 
-/** Wall / economy aliases derived from a camera id */
+/** Stream names in go2rtc for one camera */
 export function streamAliasIds(id: string): {
-  full: string;
+  /** Multi-view wall (substream if configured) */
+  wall: string;
+  /** Main / HQ for expand */
+  hq: string;
   sd: string;
   fps10: string;
 } {
   return {
-    full: id,
+    wall: id,
+    hq: `${id}__hq`,
     sd: `${id}__sd`,
     fps10: `${id}__10`,
   };
+}
+
+/**
+ * Prefer RTSP over TCP for NVR stability (UDP often drops / stutters on LAN DVR).
+ * Leaves ffmpeg:/http: sources unchanged.
+ */
+export function prepareSource(source: string): string {
+  const s = source.trim();
+  if (!s) return s;
+  // Already has go2rtc module options
+  if (s.includes("#")) return s;
+  if (/^rtsps?:\/\//i.test(s)) {
+    return `${s}#rtsp_transport=tcp`;
+  }
+  return s;
 }
 
 async function putStream(name: string, src: string): Promise<void> {
@@ -94,31 +113,46 @@ async function deleteStreamName(name: string): Promise<void> {
 }
 
 /**
- * Register primary RTSP + wall economy variants in go2rtc.
- * - full: original source
- * - __sd: lower resolution (lighter client decode)
- * - __10: ~10 FPS + lower resolution
- *
- * Variants use `ffmpeg:{id}#...` so go2rtc reuses the primary RTSP pull.
+ * Register streams in go2rtc.
+ * - wall (`id`): multi-view — uses wallSource (子碼流) when set, else main
+ * - hq (`id__hq`): main stream for expand/fullscreen
+ * - __sd / __10: economy variants from the wall stream (lighter client decode)
  */
 export async function upsertStream(
   id: string,
   source: string,
+  wallSource?: string | null,
 ): Promise<void> {
   const aliases = streamAliasIds(id);
+  const main = prepareSource(source);
+  const wallRaw = (wallSource ?? "").trim();
+  const wall = prepareSource(wallRaw || source);
+  const hasSeparateWall = Boolean(wallRaw) && wallRaw !== source.trim();
 
   // Remove first so source URL changes are applied cleanly
   await removeStream(id).catch(() => undefined);
 
-  await putStream(aliases.full, source);
+  // Multi-view wall stream (prefer NVR substream)
+  await putStream(aliases.wall, wall);
 
-  // SD: scale down, keep source frame rate (client GPU-friendly)
-  // 10fps: also cap frame rate for weaker GPUs
-  // Prefer hardware encode when available; fall back to software.
-  const sdHw = `ffmpeg:${aliases.full}#video=h264#hardware#width=854#height=480`;
-  const sdSw = `ffmpeg:${aliases.full}#video=h264#width=854#height=480`;
-  const fps10Hw = `ffmpeg:${aliases.full}#video=h264#hardware#width=640#height=360#raw=-r 10`;
-  const fps10Sw = `ffmpeg:${aliases.full}#video=h264#width=640#height=360#raw=-r 10`;
+  // HQ main for expand — only when wall uses a different URL
+  if (hasSeparateWall) {
+    try {
+      await putStream(aliases.hq, main);
+    } catch (e) {
+      console.warn(
+        `[go2rtc] HQ stream for "${id}" failed:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
+  // Economy ladder is derived from wall stream (already substream if set)
+  const base = aliases.wall;
+  const sdHw = `ffmpeg:${base}#video=h264#hardware#width=854#height=480`;
+  const sdSw = `ffmpeg:${base}#video=h264#width=854#height=480`;
+  const fps10Hw = `ffmpeg:${base}#video=h264#hardware#width=640#height=360#raw=-r 10`;
+  const fps10Sw = `ffmpeg:${base}#video=h264#width=640#height=360#raw=-r 10`;
 
   try {
     await putStream(aliases.sd, sdHw);
@@ -147,12 +181,13 @@ export async function upsertStream(
   }
 }
 
-/** Remove primary + wall aliases from go2rtc */
+/** Remove primary + aliases from go2rtc */
 export async function removeStream(id: string): Promise<void> {
   const aliases = streamAliasIds(id);
   await deleteStreamName(aliases.fps10).catch(() => undefined);
   await deleteStreamName(aliases.sd).catch(() => undefined);
-  await deleteStreamName(aliases.full);
+  await deleteStreamName(aliases.hq).catch(() => undefined);
+  await deleteStreamName(aliases.wall);
 }
 
 export async function isGo2rtcHealthy(): Promise<boolean> {
@@ -175,7 +210,7 @@ export async function reconcileStreams(cameras: CameraRow[]): Promise<{
   for (const cam of cameras) {
     try {
       if (cam.enabled) {
-        await upsertStream(cam.id, cam.source);
+        await upsertStream(cam.id, cam.source, cam.wall_source);
       } else {
         await removeStream(cam.id);
       }

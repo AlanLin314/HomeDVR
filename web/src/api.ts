@@ -15,10 +15,14 @@ export interface Camera {
   groupId: string | null;
   groupName: string | null;
   sourceMasked: string;
+  wallSourceMasked?: string | null;
+  hasWallSource?: boolean;
   syncError: string | null;
   stream: {
     mse: string;
     hls: string;
+    mseHq?: string;
+    hlsHq?: string;
     mseSd: string;
     hlsSd: string;
     mse10: string;
@@ -28,6 +32,7 @@ export interface Camera {
   createdAt: string;
   updatedAt: string;
   source?: string;
+  wallSource?: string | null;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -98,6 +103,7 @@ export function getCamera(id: string) {
 export function createCamera(body: {
   name: string;
   source: string;
+  wallSource?: string | null;
   enabled?: boolean;
   groupId?: string | null;
 }) {
@@ -112,6 +118,7 @@ export function updateCamera(
   body: {
     name?: string;
     source?: string;
+    wallSource?: string | null;
     enabled?: boolean;
     sortOrder?: number;
     groupId?: string | null;

@@ -19,6 +19,8 @@ export interface CameraRow {
   id: string;
   name: string;
   source: string;
+  /** Optional substream for wall multi-view (NVR 子碼流); null = use source */
+  wall_source: string | null;
   enabled: number;
   sort_order: number;
   group_id: string | null;
@@ -35,11 +37,19 @@ export interface CameraPublic {
   groupId: string | null;
   groupName: string | null;
   sourceMasked: string;
+  wallSourceMasked: string | null;
+  hasWallSource: boolean;
   syncError: string | null;
   stream: {
-    /** Full quality original stream */
+    /**
+     * Wall multi-view stream (substream if set, else main).
+     * Prefer this for grid tiles.
+     */
     mse: string;
     hls: string;
+    /** Main / high quality (expand / fullscreen) */
+    mseHq: string;
+    hlsHq: string;
     /** Lower resolution live (lighter decode) */
     mseSd: string;
     hlsSd: string;
@@ -55,11 +65,14 @@ export interface CameraPublic {
 
 export interface CameraDetail extends CameraPublic {
   source: string;
+  wallSource: string | null;
 }
 
 export interface CreateCameraInput {
   name: string;
   source: string;
+  /** Optional wall substream RTSP */
+  wallSource?: string | null;
   enabled?: boolean;
   id?: string;
   groupId?: string | null;
@@ -68,6 +81,7 @@ export interface CreateCameraInput {
 export interface UpdateCameraInput {
   name?: string;
   source?: string;
+  wallSource?: string | null;
   enabled?: boolean;
   sortOrder?: number;
   groupId?: string | null;

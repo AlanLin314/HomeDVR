@@ -16,6 +16,8 @@ const groupIdField = z
 const createSchema = z.object({
   name: z.string().min(1).max(120),
   source: z.string().min(1).max(2000),
+  /** Optional NVR/substream URL for multi-view wall */
+  wallSource: z.union([z.string().max(2000), z.null()]).optional(),
   enabled: z.boolean().optional(),
   id: z.string().min(1).max(64).optional(),
   groupId: groupIdField,
@@ -24,6 +26,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   source: z.string().min(1).max(2000).optional(),
+  wallSource: z.union([z.string().max(2000), z.null()]).optional(),
   enabled: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   groupId: groupIdField,

@@ -45,9 +45,16 @@ export async function renderCameraSettings(
           <input type="text" id="name" required placeholder="例如：大門" maxlength="120" />
         </label>
         <label>
-          來源 URL（RTSP 等）
-          <input type="text" id="source" required placeholder="rtsp://user:pass@192.168.1.10:554/stream1" autocomplete="off" />
+          主碼流 URL（RTSP 等）
+          <input type="text" id="source" required placeholder="rtsp://user:pass@192.168.1.10:554/Streaming/Channels/101" autocomplete="off" />
         </label>
+        <label>
+          牆面子碼流（選填，NVR 多畫面請填這個）
+          <input type="text" id="wall-source" placeholder="rtsp://…/Channels/102 或 stream2（留空=用主碼流）" autocomplete="off" />
+        </label>
+        <p class="muted" style="margin:0;font-size:0.8rem;line-height:1.4">
+          Tapo 等快的攝影機可只填主碼流。監視主機／NVR 若多畫面很慢，請把主機的「子碼流／副碼流」填在上面，多畫面會走子碼流，放大才用主碼流。
+        </p>
         <label>
           所屬分組
           <select id="group-id">
@@ -75,6 +82,7 @@ export async function renderCameraSettings(
   const form = main.querySelector("#cam-form") as HTMLFormElement;
   const nameEl = main.querySelector("#name") as HTMLInputElement;
   const sourceEl = main.querySelector("#source") as HTMLInputElement;
+  const wallSourceEl = main.querySelector("#wall-source") as HTMLInputElement;
   const enabledEl = main.querySelector("#enabled") as HTMLInputElement;
   const groupSelect = main.querySelector("#group-id") as HTMLSelectElement;
   const editIdEl = main.querySelector("#edit-id") as HTMLInputElement;
@@ -105,6 +113,7 @@ export async function renderCameraSettings(
     editIdEl.value = "";
     nameEl.value = "";
     sourceEl.value = "";
+    wallSourceEl.value = "";
     enabledEl.checked = true;
     groupSelect.value = "";
     formTitle.textContent = "新增攝影機";
@@ -153,16 +162,23 @@ export async function renderCameraSettings(
     ev.preventDefault();
     const name = nameEl.value.trim();
     const source = sourceEl.value.trim();
+    const wallSource = wallSourceEl.value.trim() || null;
     const enabled = enabledEl.checked;
     const groupId = groupSelect.value || null;
     const editId = editIdEl.value;
 
     try {
       if (editId) {
-        await updateCamera(editId, { name, source, enabled, groupId });
+        await updateCamera(editId, {
+          name,
+          source,
+          wallSource,
+          enabled,
+          groupId,
+        });
         toast("已更新", "ok");
       } else {
-        await createCamera({ name, source, enabled, groupId });
+        await createCamera({ name, source, wallSource, enabled, groupId });
         toast("已新增", "ok");
       }
       resetForm();
@@ -178,6 +194,7 @@ export async function renderCameraSettings(
       editIdEl.value = camera.id;
       nameEl.value = camera.name;
       sourceEl.value = camera.source ?? "";
+      wallSourceEl.value = camera.wallSource ?? "";
       enabledEl.checked = camera.enabled;
       fillGroupSelect(camera.groupId);
       formTitle.textContent = `編輯：${camera.name}`;
