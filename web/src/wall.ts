@@ -9,10 +9,14 @@ import {
 
 const FILTER_KEY = "homedvr.wallGroupFilter";
 const STREAM_PICK_KEY = "homedvr.wallStreamPick";
+const SMOOTH_KEY = "homedvr.wallSmooth";
+const PAGE_SIZE_KEY = "homedvr.wallPageSize";
 
 type Filter = "all" | "ungrouped" | string; // string = group id
 /** Manual main/sub stream selection for multi-view wall */
 type StreamPick = "main" | "sub";
+/** 0 = show all; otherwise max concurrent tiles (paginated) */
+type PageSize = 0 | 4 | 6 | 9;
 
 function loadStreamPick(): StreamPick {
   try {
@@ -28,6 +32,40 @@ function loadStreamPick(): StreamPick {
 function saveStreamPick(p: StreamPick) {
   try {
     localStorage.setItem(STREAM_PICK_KEY, p);
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadSmooth(): boolean {
+  try {
+    return localStorage.getItem(SMOOTH_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveSmooth(on: boolean) {
+  try {
+    localStorage.setItem(SMOOTH_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPageSize(): PageSize {
+  try {
+    const n = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    if (n === 0 || n === 4 || n === 6 || n === 9) return n;
+  } catch {
+    /* ignore */
+  }
+  return 0;
+}
+
+function savePageSize(n: PageSize) {
+  try {
+    localStorage.setItem(PAGE_SIZE_KEY, String(n));
   } catch {
     /* ignore */
   }
@@ -90,14 +128,32 @@ function viewportWidth(): number {
 }
 
 /**
- * Max concurrent live streams on constrained devices (phone / iPad).
- * Desktop has no cap — all cameras play at once.
+ * Max concurrent live streams.
+ * Phones always limited; desktop unlimited unless smooth mode / page size.
  */
-function maxConcurrentStreams(): number {
+function maxConcurrentStreams(opts?: {
+  smooth?: boolean;
+  pageSize?: PageSize;
+}): number {
   const w = viewportWidth();
-  if (w < 640) return 2; // phone: typically 1–2 tiles on screen
-  if (w < 1100) return 4; // iPad portrait / small tablet
-  return 6; // iPad landscape
+  const page = opts?.pageSize ?? 0;
+  if (page > 0) return page;
+  if (opts?.smooth) {
+    if (w < 640) return 2;
+    if (w < 1100) return 4;
+    return 6;
+  }
+  // Phone / tablet always capped
+  const ua = navigator.userAgent || "";
+  const mobile =
+    /iPad|iPhone|iPod|Android/i.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (mobile || w < 900) {
+    if (w < 640) return 2;
+    if (w < 1100) return 4;
+    return 6;
+  }
+  return 32; // desktop "all"
 }
 
 function loadFilter(): Filter {
@@ -129,6 +185,9 @@ export async function renderWall(
   let groups: Group[] = [];
   let filter: Filter = loadFilter();
   let streamPick: StreamPick = loadStreamPick();
+  let smoothMode = loadSmooth();
+  let pageSize: PageSize = loadPageSize();
+  let pageIndex = 0;
   let expandedId: string | null = null;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
   let qualityBadge: HTMLElement | null = null;
@@ -137,6 +196,24 @@ export async function renderWall(
 
   const perf = createPerfController();
   let quality: QualityInfo = qualityInfo(0);
+
+  /** Effective play settings: smooth mode forces sub + lighter live */
+  const effectivePlay = () => {
+    if (smoothMode) {
+      return {
+        mode: "live" as const,
+        variant: "fps10" as const,
+        streamPick: "sub" as StreamPick,
+        intervalMs: 0,
+      };
+    }
+    return {
+      mode: quality.mode,
+      variant: quality.variant,
+      streamPick,
+      intervalMs: quality.intervalMs || 1000,
+    };
+  };
 
   const paintQualityBadge = () => {
     if (!qualityBadge) return;
@@ -154,37 +231,55 @@ export async function renderWall(
   const paintStreamPickBar = () => {
     if (!streamPickBar) return;
     const hasAnySub = allCameras.some((c) => c.hasWallSource);
+    const effPick = smoothMode ? "sub" : streamPick;
     streamPickBar.innerHTML = `
+      <button type="button" class="chip stream-pick-btn ${smoothMode ? "active" : ""}" data-smooth="1" title="強制副碼流 + 約 10FPS，限制同時路數，最穩">順暢</button>
       <span class="stream-pick-label">碼流</span>
-      <button type="button" class="chip stream-pick-btn ${streamPick === "sub" ? "active" : ""}" data-pick="sub" title="副碼流／牆面流（多畫面較輕）">副碼流</button>
-      <button type="button" class="chip stream-pick-btn ${streamPick === "main" ? "active" : ""}" data-pick="main" title="主碼流（畫質高、多路較吃資源）">主碼流</button>
+      <button type="button" class="chip stream-pick-btn ${!smoothMode && effPick === "sub" ? "active" : ""}" data-pick="sub" ${smoothMode ? "disabled" : ""} title="副碼流／牆面流（多畫面較輕）">副</button>
+      <button type="button" class="chip stream-pick-btn ${!smoothMode && effPick === "main" ? "active" : ""}" data-pick="main" ${smoothMode ? "disabled" : ""} title="主碼流（畫質高、多路較吃資源）">主</button>
+      <span class="stream-pick-label">同時</span>
+      <button type="button" class="chip stream-pick-btn ${pageSize === 0 ? "active" : ""}" data-pagesize="0" title="全部同時解碼（最吃資源）">全</button>
+      <button type="button" class="chip stream-pick-btn ${pageSize === 4 ? "active" : ""}" data-pagesize="4">4</button>
+      <button type="button" class="chip stream-pick-btn ${pageSize === 6 ? "active" : ""}" data-pagesize="6">6</button>
+      <button type="button" class="chip stream-pick-btn ${pageSize === 9 ? "active" : ""}" data-pagesize="9">9</button>
       ${
         !hasAnySub
-          ? `<span class="stream-pick-hint muted">未設定副碼流時兩者相同，請在攝影機編輯填「牆面子碼流」</span>`
+          ? `<span class="stream-pick-hint muted">未設副碼流時主/副相同 → 攝影機編輯填「牆面子碼流」</span>`
           : ""
       }
     `;
+    streamPickBar.querySelector("[data-smooth]")?.addEventListener("click", () => {
+      smoothMode = !smoothMode;
+      saveSmooth(smoothMode);
+      if (smoothMode) {
+        streamPick = "sub";
+        saveStreamPick("sub");
+        if (pageSize === 0) {
+          pageSize = 6;
+          savePageSize(6);
+        }
+      }
+      pageIndex = 0;
+      paintStreamPickBar();
+      paintWall();
+      toast(
+        smoothMode
+          ? "順暢模式：副碼流 + 約 10FPS + 限制同時路數"
+          : "已關閉順暢模式",
+        "ok",
+      );
+    });
     streamPickBar.querySelectorAll("[data-pick]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (smoothMode) return;
         const p = (btn as HTMLElement).dataset.pick as StreamPick;
         if (p !== "main" && p !== "sub") return;
         if (p === streamPick) return;
         streamPick = p;
         saveStreamPick(p);
         paintStreamPickBar();
-        // Restart all tiles on the chosen stream
-        for (const [id, handle] of players) {
-          const isExpanded = expandedId === id;
-          handle.setPlayMode(isExpanded ? "live" : quality.mode, {
-            intervalMs: quality.intervalMs || 1000,
-            variant: quality.variant,
-            streamPick,
-            forceLive: isExpanded,
-          });
-          if (handle.isActive() || !isConstrainedDevice() || isExpanded) {
-            handle.start();
-          }
-        }
+        applyQualityToPlayers();
+        for (const handle of players.values()) handle.start();
         toast(
           p === "main"
             ? "已切換主碼流（畫質高，多路較吃力）"
@@ -193,16 +288,33 @@ export async function renderWall(
         );
       });
     });
+    streamPickBar.querySelectorAll("[data-pagesize]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const n = Number((btn as HTMLElement).dataset.pagesize) as PageSize;
+        if (n !== 0 && n !== 4 && n !== 6 && n !== 9) return;
+        if (n === pageSize) return;
+        pageSize = n;
+        pageIndex = 0;
+        savePageSize(n);
+        paintStreamPickBar();
+        paintWall();
+        toast(
+          n === 0 ? "同時解碼全部" : `每頁最多 ${n} 路（可翻頁）`,
+          "ok",
+        );
+      });
+    });
   };
 
   /** Apply quality ladder + main/sub pick to every player */
   const applyQualityToPlayers = () => {
+    const eff = effectivePlay();
     for (const [id, handle] of players) {
       const isExpanded = expandedId === id;
-      handle.setPlayMode(quality.mode, {
-        intervalMs: quality.intervalMs || 1000,
-        variant: quality.variant,
-        streamPick,
+      handle.setPlayMode(isExpanded ? "live" : eff.mode, {
+        intervalMs: eff.intervalMs,
+        variant: isExpanded ? "full" : eff.variant,
+        streamPick: isExpanded ? "main" : eff.streamPick,
         forceLive: isExpanded,
       });
     }
@@ -317,9 +429,11 @@ export async function renderWall(
 
   /**
    * Expanded single view: only that camera decodes (HQ).
-   * Otherwise desktop plays all; phone/iPad only visible tiles.
+   * Otherwise: respect page size / smooth caps / viewport.
    */
   const reconcileStreams = () => {
+    const eff = effectivePlay();
+
     // Fullscreen one camera — free every other decoder slot
     if (expandedId) {
       for (const [id, handle] of players) {
@@ -337,12 +451,18 @@ export async function renderWall(
       return;
     }
 
-    if (!isConstrainedDevice()) {
+    const hardCap = maxConcurrentStreams({
+      smooth: smoothMode,
+      pageSize,
+    });
+
+    // Desktop without page/smooth: all players on page
+    if (!isConstrainedDevice() && pageSize === 0 && !smoothMode) {
       for (const [, handle] of players) {
-        handle.setPlayMode(quality.mode, {
-          intervalMs: quality.intervalMs || 1000,
-          variant: quality.variant,
-          streamPick,
+        handle.setPlayMode(eff.mode, {
+          intervalMs: eff.intervalMs,
+          variant: eff.variant,
+          streamPick: eff.streamPick,
           forceLive: false,
         });
         handle.start();
@@ -350,22 +470,30 @@ export async function renderWall(
       return;
     }
 
-    // Snapshot is cheap → allow more concurrent tiles; live stays capped
-    const max =
-      quality.mode === "snapshot"
-        ? Math.max(maxConcurrentStreams() * 3, 12)
-        : maxConcurrentStreams();
-    const ranked = [...visibility.entries()]
-      .filter(([, ratio]) => ratio > 0)
-      .sort((a, b) => b[1] - a[1]);
-
-    const want = new Set(ranked.slice(0, max).map(([id]) => id));
+    // Cap concurrent: prefer visible tiles, then fill up to hardCap
+    const ranked = [...visibility.entries()].sort((a, b) => {
+      if (a[1] !== b[1]) return b[1] - a[1];
+      return 0;
+    });
+    const want = new Set(
+      ranked
+        .filter(([, r]) => r > 0)
+        .slice(0, hardCap)
+        .map(([id]) => id),
+    );
+    // If few visible, still start first hardCap on page (desktop smooth)
+    if (want.size < hardCap) {
+      for (const id of players.keys()) {
+        if (want.size >= hardCap) break;
+        want.add(id);
+      }
+    }
 
     for (const [id, handle] of players) {
-      handle.setPlayMode(quality.mode, {
-        intervalMs: quality.intervalMs || 1000,
-        variant: quality.variant,
-        streamPick,
+      handle.setPlayMode(eff.mode, {
+        intervalMs: eff.intervalMs,
+        variant: eff.variant,
+        streamPick: eff.streamPick,
         forceLive: false,
       });
       if (want.has(id)) {
@@ -390,14 +518,15 @@ export async function renderWall(
       return;
     }
 
-    // Desktop / laptop: start all streams immediately (no viewport gating)
-    if (!isConstrainedDevice()) {
+    // Desktop without caps: start all on this page
+    if (!isConstrainedDevice() && pageSize === 0 && !smoothMode) {
+      const eff = effectivePlay();
       for (const [id, handle] of players) {
         visibility.set(id, 1);
-        handle.setPlayMode(quality.mode, {
-          intervalMs: quality.intervalMs || 1000,
-          variant: quality.variant,
-          streamPick,
+        handle.setPlayMode(eff.mode, {
+          intervalMs: eff.intervalMs,
+          variant: eff.variant,
+          streamPick: eff.streamPick,
           forceLive: false,
         });
         handle.start();
@@ -406,17 +535,14 @@ export async function renderWall(
     }
 
     if (typeof IntersectionObserver === "undefined") {
-      // Fallback: start up to the cap in paint order
+      const eff = effectivePlay();
       let n = 0;
-      const max =
-        quality.mode === "snapshot"
-          ? Math.max(maxConcurrentStreams() * 3, 12)
-          : maxConcurrentStreams();
+      const max = maxConcurrentStreams({ smooth: smoothMode, pageSize });
       for (const [id, handle] of players) {
-        handle.setPlayMode(quality.mode, {
-          intervalMs: quality.intervalMs || 1000,
-          variant: quality.variant,
-          streamPick,
+        handle.setPlayMode(eff.mode, {
+          intervalMs: eff.intervalMs,
+          variant: eff.variant,
+          streamPick: eff.streamPick,
           forceLive: false,
         });
         if (n < max) {
@@ -466,6 +592,46 @@ export async function renderWall(
     if (filter === "all") return allCameras;
     if (filter === "ungrouped") return allCameras.filter((c) => !c.groupId);
     return allCameras.filter((c) => c.groupId === filter);
+  };
+
+  /** Apply page size slice for multi-view */
+  const paged = (list: Camera[]): Camera[] => {
+    if (expandedId) {
+      return list.filter((c) => c.id === expandedId);
+    }
+    if (!pageSize || pageSize <= 0) return list;
+    const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+    if (pageIndex >= totalPages) pageIndex = totalPages - 1;
+    if (pageIndex < 0) pageIndex = 0;
+    const start = pageIndex * pageSize;
+    return list.slice(start, start + pageSize);
+  };
+
+  const paintPager = (list: Camera[]) => {
+    wrap.querySelector(".wall-pager")?.remove();
+    if (!pageSize || pageSize <= 0 || expandedId) return;
+    const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+    if (totalPages <= 1) return;
+    const pager = document.createElement("div");
+    pager.className = "wall-pager";
+    pager.innerHTML = `
+      <button type="button" class="btn btn-sm" data-page="prev" ${pageIndex <= 0 ? "disabled" : ""}>上一頁</button>
+      <span class="muted">${pageIndex + 1} / ${totalPages}（每頁 ${pageSize} 路）</span>
+      <button type="button" class="btn btn-sm" data-page="next" ${pageIndex >= totalPages - 1 ? "disabled" : ""}>下一頁</button>
+    `;
+    pager.querySelector('[data-page="prev"]')?.addEventListener("click", () => {
+      if (pageIndex > 0) {
+        pageIndex -= 1;
+        paintWall();
+      }
+    });
+    pager.querySelector('[data-page="next"]')?.addEventListener("click", () => {
+      if (pageIndex < totalPages - 1) {
+        pageIndex += 1;
+        paintWall();
+      }
+    });
+    wrap.appendChild(pager);
   };
 
   const paintChips = () => {
@@ -519,9 +685,10 @@ export async function renderWall(
     destroyAll();
     wall.innerHTML = "";
     wrap.querySelector(".empty-state")?.remove();
+    wrap.querySelector(".wall-pager")?.remove();
 
-    const cameras = filtered();
-    if (cameras.length === 0) {
+    const allFiltered = filtered();
+    if (allFiltered.length === 0) {
       wall.style.display = "none";
       const empty = document.createElement("div");
       empty.className = "empty-state";
@@ -547,13 +714,14 @@ export async function renderWall(
       return;
     }
 
+    const cameras = paged(allFiltered);
+    paintPager(allFiltered);
+
     wall.style.display = "grid";
     wall.dataset.cols = String(colsFor(cameras.length, viewportWidth()));
 
     // When one tile is expanded, only build that player (no decode of the rest)
-    const toShow = expandedId
-      ? cameras.filter((c) => c.id === expandedId)
-      : cameras;
+    const toShow = cameras;
 
     for (const cam of toShow) {
       const tile = document.createElement("div");
@@ -707,22 +875,23 @@ export async function renderWall(
         snapshot: cam.stream.snapshot,
         autoStart: false,
       });
+      const eff = effectivePlay();
       // Expanded mode: only create/start the expanded player in setup
       handle.setPlayMode(
-        expandedId ? "live" : quality.mode,
+        expandedId ? "live" : eff.mode,
         expandedId === cam.id
           ? { variant: "full", streamPick: "main", forceLive: true }
           : {
-              intervalMs: quality.intervalMs || 1000,
-              variant: quality.variant,
-              streamPick,
+              intervalMs: eff.intervalMs,
+              variant: eff.variant,
+              streamPick: eff.streamPick,
               forceLive: false,
             },
       );
       players.set(cam.id, handle);
     }
 
-    perf.setCameraCount(cameras.length);
+    perf.setCameraCount(allFiltered.length);
     paintQualityBadge();
     paintStreamPickBar();
     setupStreamObserver();

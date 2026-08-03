@@ -270,9 +270,23 @@ function startMse(
               flush();
               if (sb && !sb.updating && sb.buffered.length) {
                 const end = sb.buffered.end(sb.buffered.length - 1);
-                const start = Math.max(end - 5, sb.buffered.start(0));
-                if (video.currentTime < start) {
-                  video.currentTime = start;
+                const bufStart = sb.buffered.start(0);
+                // Keep a short live window (~2.5s) — multi-view needs less latency/RAM
+                const liveFrom = Math.max(end - 2.5, bufStart);
+                if (video.currentTime < liveFrom || video.currentTime > end - 0.15) {
+                  try {
+                    video.currentTime = Math.max(end - 0.35, liveFrom);
+                  } catch {
+                    /* ignore */
+                  }
+                }
+                // Drop old segments so SourceBuffer does not grow forever
+                if (end - bufStart > 4 && !sb.updating) {
+                  try {
+                    sb.remove(bufStart, Math.max(end - 3, bufStart + 0.1));
+                  } catch {
+                    /* ignore QuotaExceeded / mid-update */
+                  }
                 }
                 markPlaying();
               }

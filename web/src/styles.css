@@ -706,6 +706,20 @@ a:hover {
   max-width: 100%;
 }
 
+.stream-pick-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wall-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+
 .chip-bar::-webkit-scrollbar {
   display: none;
 }
