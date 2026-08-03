@@ -2,15 +2,15 @@
  * Adaptive wall performance (stepped quality ladder).
  *
  * Order when overloaded (only goes DOWN, never auto-upgrades):
- *   0 full live  →  1 low-res live  →  2 ~10 FPS live  →  3 JPEG 2fps  →  4 JPEG 1fps
+ *   0 full live  ->  1 low-res live  ->  2 ~10 FPS live  ->  3 JPEG 2fps  ->  4 JPEG 1fps
  *
- * Once reduced, stay there for the session — auto "recover" was putting
+ * Once reduced, stay there for the session -- auto "recover" was putting
  * weak clients back on streams they cannot decode.
  *
  * How real NVRs multi-view works (we mirror that):
  * - Grid uses substream / low-res (not main 1080p/4K)
  * - Dedicated decode chips, hard channel caps
- * - Browser has no NVR ASIC → must use lighter streams + optional JPEG
+ * - Browser has no NVR ASIC -> must use lighter streams + optional JPEG
  */
 
 export type QualityTier = 0 | 1 | 2 | 3 | 4;
@@ -178,7 +178,7 @@ export function createPerfController(): PerfController {
     getInfo: () => qualityInfo(tier),
     setCameraCount: (n: number) => {
       cameraCount = n;
-      // Proactive: weak hardware → start at low-res (never climbs back)
+      // Proactive: weak hardware -> start at low-res (never climbs back)
       if (tier === 0 && estimateWeakGpu(n)) {
         setTierDown(1, "偵測到硬體較弱／路數多，先降畫質（不會自動升回）");
       }
@@ -186,9 +186,13 @@ export function createPerfController(): PerfController {
       if (!bootNotified && tier > 0) {
         bootNotified = true;
         // Defer so wall can register onChange first
-        queuePromise.resolve().then(() => {
+        void Promise.resolve().then(() => {
           if (!destroyed) {
-            notify(`沿用本頁降載：${qualityInfo(tier).label}（不會自動升回）`);
+            notify(
+              "沿用本頁降載：" +
+                qualityInfo(tier).label +
+                "（不會自動升回）",
+            );
           }
         });
       }
@@ -257,14 +261,14 @@ export function createPerfController(): PerfController {
           };
           setTierDown(
             next,
-            `解碼過載，${labels[next]}（鎖定，不會自動升回）`,
+            "解碼過載，" + labels[next] + "（鎖定，不會自動升回）",
           );
         }
         return;
       }
 
       badTicks = 0;
-      // Intentionally NO auto-upgrade — user asked to stay at reduced quality
+      // Intentionally NO auto-upgrade -- stay at reduced quality
       void cameraCount;
     },
     destroy: () => {
@@ -276,7 +280,7 @@ export function createPerfController(): PerfController {
       listeners.push(cb);
       // Immediately sync current (possibly saved) tier
       if (tier > 0) {
-        cb(qualityInfo(tier), `目前：${qualityInfo(tier).label}`);
+        cb(qualityInfo(tier), "目前：" + qualityInfo(tier).label);
       }
     },
   };
