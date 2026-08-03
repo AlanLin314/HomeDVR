@@ -1,11 +1,16 @@
 /**
  * Adaptive wall performance (stepped quality ladder).
  *
- * Order when overloaded:
+ * Order when overloaded (only goes DOWN, never auto-upgrades):
  *   0 full live  →  1 low-res live  →  2 ~10 FPS live  →  3 JPEG 2fps  →  4 JPEG 1fps
  *
- * High-res streams are reduced first so every camera can stay visible
- * without jumping straight to snapshot mode.
+ * Once reduced, stay there for the session — auto "recover" was putting
+ * weak clients back on streams they cannot decode.
+ *
+ * How real NVRs multi-view works (we mirror that):
+ * - Grid uses substream / low-res (not main 1080p/4K)
+ * - Dedicated decode chips, hard channel caps
+ * - Browser has no NVR ASIC → must use lighter streams + optional JPEG
  */
 
 export type QualityTier = 0 | 1 | 2 | 3 | 4;
@@ -62,8 +67,28 @@ const TIERS: Record<QualityTier, Omit<QualityInfo, "tier">> = {
   },
 };
 
+const TIER_KEY = "homedvr.wallQualityTier";
+
 export function qualityInfo(tier: QualityTier): QualityInfo {
   return { tier, ...TIERS[tier] };
+}
+
+function loadSavedTier(): QualityTier {
+  try {
+    const n = Number(sessionStorage.getItem(TIER_KEY));
+    if (n >= 0 && n <= 4 && Number.isInteger(n)) return n as QualityTier;
+  } catch {
+    /* ignore */
+  }
+  return 0;
+}
+
+function saveTier(tier: QualityTier): void {
+  try {
+    sessionStorage.setItem(TIER_KEY, String(tier));
+  } catch {
+    /* ignore */
+  }
 }
 
 export interface PlayerMetricsSample {
@@ -100,21 +125,22 @@ export function estimateWeakGpu(cameraCount: number): boolean {
 }
 
 export function createPerfController(): PerfController {
-  let tier: QualityTier = 0;
+  // Resume last degraded tier for this browser tab (no auto climb back)
+  let tier: QualityTier = loadSavedTier();
   let cameraCount = 0;
   let listeners: Array<(info: QualityInfo, reason: string) => void> = [];
   let lastDrop = new Map<string, { dropped: number; total: number }>();
-  let goodTicks = 0;
   let badTicks = 0;
   let lastChangeAt = 0;
   let destroyed = false;
+  let bootNotified = false;
 
   let longFrames = 0;
   let frameSamples = 0;
   let lastRaf = 0;
   let rafId = 0;
 
-  const COOLDOWN_MS = 10_000;
+  const COOLDOWN_MS = 8_000;
   const MAX_TIER = 4 as QualityTier;
 
   const notify = (reason: string) => {
@@ -122,18 +148,16 @@ export function createPerfController(): PerfController {
     for (const cb of listeners) cb(info, reason);
   };
 
-  const setTier = (next: QualityTier, reason: string) => {
-    if (next === tier) return;
-    if (next < 0) next = 0;
+  /** Only allow equal or worse (higher number). Never auto-upgrade. */
+  const setTierDown = (next: QualityTier, reason: string) => {
+    if (next <= tier) return;
     if (next > MAX_TIER) next = MAX_TIER;
     const now = Date.now();
-    // Degrade can happen after short cooldown; upgrade is slower
-    if (next > tier && now - lastChangeAt < COOLDOWN_MS) return;
-    if (next < tier && now - lastChangeAt < COOLDOWN_MS * 1.6) return;
+    if (now - lastChangeAt < COOLDOWN_MS && lastChangeAt > 0) return;
     tier = next;
     lastChangeAt = now;
-    goodTicks = 0;
     badTicks = 0;
+    saveTier(tier);
     notify(reason);
   };
 
@@ -154,9 +178,19 @@ export function createPerfController(): PerfController {
     getInfo: () => qualityInfo(tier),
     setCameraCount: (n: number) => {
       cameraCount = n;
-      // Proactive: weak hardware → start at low-res live (not snapshot)
+      // Proactive: weak hardware → start at low-res (never climbs back)
       if (tier === 0 && estimateWeakGpu(n)) {
-        setTier(1, "偵測到硬體較弱／路數多，先降畫質");
+        setTierDown(1, "偵測到硬體較弱／路數多，先降畫質（不會自動升回）");
+      }
+      // Re-apply saved tier UI once listeners exist
+      if (!bootNotified && tier > 0) {
+        bootNotified = true;
+        // Defer so wall can register onChange first
+        queuePromise.resolve().then(() => {
+          if (!destroyed) {
+            notify(`沿用本頁降載：${qualityInfo(tier).label}（不會自動升回）`);
+          }
+        });
       }
     },
     sample: (metrics: PlayerMetricsSample[]) => {
@@ -212,33 +246,26 @@ export function createPerfController(): PerfController {
 
       if (stressed) {
         badTicks += 1;
-        goodTicks = 0;
         if (badTicks >= 2 && tier < MAX_TIER) {
           const next = (tier + 1) as QualityTier;
           const labels: Record<QualityTier, string> = {
             0: "原畫質",
-            1: "先降畫質（低解析度）",
-            2: "再降到 10 FPS",
+            1: "降畫質（低解析度）",
+            2: "降到 10 FPS",
             3: "改為預覽 2 FPS",
             4: "再降到預覽 1 FPS",
           };
-          setTier(next, `解碼過載，${labels[next]}`);
+          setTierDown(
+            next,
+            `解碼過載，${labels[next]}（鎖定，不會自動升回）`,
+          );
         }
         return;
       }
 
       badTicks = 0;
-      goodTicks += 1;
-
-      // Recover one step at a time when stable
-      if (goodTicks >= 8 && tier > 0) {
-        const prev = (tier - 1) as QualityTier;
-        // From SD back to full: require longer calm on weak machines
-        if (tier === 1 && estimateWeakGpu(cameraCount) && goodTicks < 14) {
-          return;
-        }
-        setTier(prev, `效能回穩，提升到 ${qualityInfo(prev).label}`);
-      }
+      // Intentionally NO auto-upgrade — user asked to stay at reduced quality
+      void cameraCount;
     },
     destroy: () => {
       destroyed = true;
@@ -247,6 +274,10 @@ export function createPerfController(): PerfController {
     },
     onChange: (cb) => {
       listeners.push(cb);
+      // Immediately sync current (possibly saved) tier
+      if (tier > 0) {
+        cb(qualityInfo(tier), `目前：${qualityInfo(tier).label}`);
+      }
     },
   };
 }

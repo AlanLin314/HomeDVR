@@ -124,7 +124,7 @@ export async function renderWall(
     qualityBadge.hidden = false;
     qualityBadge.textContent = quality.label;
     qualityBadge.title =
-      "偵測到顯示卡／解碼負載過高，已自動降幀預覽，讓所有攝影機都能顯示。效能回穩後會再嘗試即時串流。";
+      "已自動降載以維持多路可看。此分頁內不會自動升回高畫質（升回常又看不到）。重新整理後仍沿用；要重置請關閉分頁再開。";
   };
 
   /** Apply quality ladder (full → SD → 10fps → snapshot) to every player */
