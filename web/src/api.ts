@@ -36,12 +36,17 @@ export interface Camera {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  // Only send JSON content-type when there is a body — bare DELETE/GET with
+  // application/json confuses Fastify body parser (400 Bad Request).
+  if (init?.body != null && headers["Content-Type"] === undefined) {
+    headers["Content-Type"] = "application/json";
+  }
   const res = await fetch(path, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -891,7 +891,8 @@ a:hover {
   flex: 0 0 auto;
 }
 
-.tile-actions button {
+.tile-actions button,
+.tile-actions .tile-icon-btn {
   appearance: none;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.32);
@@ -906,12 +907,29 @@ a:hover {
   -webkit-tap-highlight-color: transparent;
 }
 
-.tile-actions button:hover {
+.tile-actions .tile-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.tile-actions .tile-icon-btn svg {
+  display: block;
+}
+
+.tile-actions button:hover,
+.tile-actions .tile-icon-btn:hover {
   background: rgba(91, 157, 255, 0.4);
   border-color: rgba(147, 197, 253, 0.55);
 }
 
-.tile-actions button:active {
+.tile-actions button:active,
+.tile-actions .tile-icon-btn:active {
   background: rgba(91, 157, 255, 0.5);
 }
 
@@ -949,6 +967,13 @@ a:hover {
     min-height: 44px;
     padding: 0.4rem 0.7rem;
     font-size: 0.78rem;
+  }
+
+  .tile-actions .tile-icon-btn {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
   }
 
   .chip-bar {

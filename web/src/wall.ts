@@ -240,14 +240,33 @@ export async function renderWall(
     visibility.clear();
   };
 
-  /** Desktop: play every camera. Phone/iPad: only visible tiles up to a cap. */
+  /**
+   * Expanded single view: only that camera decodes (HQ).
+   * Otherwise desktop plays all; phone/iPad only visible tiles.
+   */
   const reconcileStreams = () => {
+    // Fullscreen one camera — free every other decoder slot
+    if (expandedId) {
+      for (const [id, handle] of players) {
+        if (id === expandedId) {
+          handle.setPlayMode("live", {
+            variant: "full",
+            forceLive: true,
+          });
+          handle.start();
+        } else {
+          handle.stop();
+        }
+      }
+      return;
+    }
+
     if (!isConstrainedDevice()) {
       for (const [id, handle] of players) {
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
           variant: quality.variant,
-          forceLive: expandedId === id,
+          forceLive: false,
         });
         handle.start();
       }
@@ -261,22 +280,15 @@ export async function renderWall(
         : maxConcurrentStreams();
     const ranked = [...visibility.entries()]
       .filter(([, ratio]) => ratio > 0)
-      .sort((a, b) => {
-        // Expanded tile always wins
-        if (a[0] === expandedId) return -1;
-        if (b[0] === expandedId) return 1;
-        return b[1] - a[1];
-      });
+      .sort((a, b) => b[1] - a[1]);
 
     const want = new Set(ranked.slice(0, max).map(([id]) => id));
-    // Always keep expanded live
-    if (expandedId) want.add(expandedId);
 
     for (const [id, handle] of players) {
       handle.setPlayMode(quality.mode, {
         intervalMs: quality.intervalMs || 1000,
         variant: quality.variant,
-        forceLive: expandedId === id,
+        forceLive: false,
       });
       if (want.has(id)) {
         handle.start();
@@ -291,6 +303,15 @@ export async function renderWall(
     streamObserver = null;
     visibility.clear();
 
+    // Expanded: only that tile
+    if (expandedId) {
+      for (const [id, handle] of players) {
+        visibility.set(id, id === expandedId ? 1 : 0);
+      }
+      reconcileStreams();
+      return;
+    }
+
     // Desktop / laptop: start all streams immediately (no viewport gating)
     if (!isConstrainedDevice()) {
       for (const [id, handle] of players) {
@@ -298,7 +319,7 @@ export async function renderWall(
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
           variant: quality.variant,
-          forceLive: expandedId === id,
+          forceLive: false,
         });
         handle.start();
       }
@@ -316,7 +337,7 @@ export async function renderWall(
         handle.setPlayMode(quality.mode, {
           intervalMs: quality.intervalMs || 1000,
           variant: quality.variant,
-          forceLive: expandedId === id,
+          forceLive: false,
         });
         if (n < max) {
           visibility.set(id, 1);
@@ -449,7 +470,12 @@ export async function renderWall(
     wall.style.display = "grid";
     wall.dataset.cols = String(colsFor(cameras.length, viewportWidth()));
 
-    for (const cam of cameras) {
+    // When one tile is expanded, only build that player (no decode of the rest)
+    const toShow = expandedId
+      ? cameras.filter((c) => c.id === expandedId)
+      : cameras;
+
+    for (const cam of toShow) {
       const tile = document.createElement("div");
       tile.className = "tile";
       tile.dataset.id = cam.id;
@@ -484,10 +510,17 @@ export async function renderWall(
       const actions = document.createElement("div");
       actions.className = "tile-actions";
 
+      const iconRetry = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`;
+      const iconExpand = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`;
+      const iconCollapse = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>`;
+      const iconEdit = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+
       const edit = document.createElement("button");
       edit.type = "button";
-      edit.textContent = "編輯";
-      edit.title = "編輯此攝影機";
+      edit.className = "tile-icon-btn";
+      edit.innerHTML = iconEdit;
+      edit.title = "編輯";
+      edit.setAttribute("aria-label", "編輯");
       edit.addEventListener("click", (e) => {
         e.stopPropagation();
         navigate(`/cameras?edit=${encodeURIComponent(cam.id)}`);
@@ -495,7 +528,10 @@ export async function renderWall(
 
       const retry = document.createElement("button");
       retry.type = "button";
-      retry.textContent = "重試";
+      retry.className = "tile-icon-btn";
+      retry.innerHTML = iconRetry;
+      retry.title = "重試";
+      retry.setAttribute("aria-label", "重試");
       retry.addEventListener("click", (e) => {
         e.stopPropagation();
         players.get(cam.id)?.retry();
@@ -503,7 +539,11 @@ export async function renderWall(
 
       const expand = document.createElement("button");
       expand.type = "button";
-      expand.textContent = expandedId === cam.id ? "縮小" : "放大";
+      expand.className = "tile-icon-btn";
+      const isExp = expandedId === cam.id;
+      expand.innerHTML = isExp ? iconCollapse : iconExpand;
+      expand.title = isExp ? "縮小" : "放大";
+      expand.setAttribute("aria-label", expand.title);
       expand.addEventListener("click", (e) => {
         e.stopPropagation();
         expandedId = expandedId === cam.id ? null : cam.id;
@@ -587,11 +627,17 @@ export async function renderWall(
         snapshot: cam.stream.snapshot,
         autoStart: false,
       });
-      handle.setPlayMode(quality.mode, {
-        intervalMs: quality.intervalMs || 1000,
-        variant: quality.variant,
-        forceLive: expandedId === cam.id,
-      });
+      // Expanded mode: only create/start the expanded player in setup
+      handle.setPlayMode(
+        expandedId ? "live" : quality.mode,
+        expandedId === cam.id
+          ? { variant: "full", forceLive: true }
+          : {
+              intervalMs: quality.intervalMs || 1000,
+              variant: quality.variant,
+              forceLive: false,
+            },
+      );
       players.set(cam.id, handle);
     }
 

@@ -94,9 +94,15 @@ export async function cameraRoutes(app: FastifyInstance): Promise<void> {
   app.delete<{ Params: { id: string } }>(
     "/api/cameras/:id",
     async (req, reply) => {
-      const ok = await removeCamera(req.params.id);
-      if (!ok) return reply.code(404).send({ error: "Camera not found" });
-      return { ok: true };
+      try {
+        const ok = await removeCamera(req.params.id);
+        if (!ok) return reply.code(404).send({ error: "Camera not found" });
+        return { ok: true };
+      } catch (e) {
+        return reply
+          .code(500)
+          .send({ error: e instanceof Error ? e.message : String(e) });
+      }
     },
   );
 
