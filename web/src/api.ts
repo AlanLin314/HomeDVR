@@ -16,7 +16,7 @@ export interface Camera {
   groupName: string | null;
   sourceMasked: string;
   syncError: string | null;
-  stream: { mse: string; hls: string };
+  stream: { mse: string; hls: string; snapshot: string };
   createdAt: string;
   updatedAt: string;
   source?: string;

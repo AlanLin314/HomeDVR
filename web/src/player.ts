@@ -11,6 +11,17 @@ export type PlayerStatus =
   | "error"
   | "stopped";
 
+/** live = MSE/HLS decode; snapshot = JPEG refresh (low FPS, no GPU decoder) */
+export type PlayMode = "live" | "snapshot";
+
+export interface PlayerMetrics {
+  status: PlayerStatus;
+  mode: PlayMode;
+  droppedFrames: number;
+  totalFrames: number;
+  wantLive: boolean;
+}
+
 export interface PlayerHandle {
   el: HTMLElement;
   destroy: () => void;
@@ -21,6 +32,17 @@ export interface PlayerHandle {
   retry: () => void;
   getStatus: () => PlayerStatus;
   isActive: () => boolean;
+  /**
+   * live = full video decode.
+   * snapshot = poll JPEG (intervalMs), frees hardware decoders so all tiles show.
+   * forceLive: ignore wall economy mode (e.g. expanded tile).
+   */
+  setPlayMode: (
+    mode: PlayMode,
+    opts?: { intervalMs?: number; forceLive?: boolean },
+  ) => void;
+  getPlayMode: () => PlayMode;
+  getMetrics: () => PlayerMetrics;
 }
 
 const CODECS = [
@@ -359,6 +381,8 @@ export function createPlayer(
     mse: string;
     hls: string;
     name: string;
+    /** go2rtc JPEG frame URL for low-FPS economy mode */
+    snapshot?: string;
     /** Default true. Wall sets false and starts only when tile is on-screen. */
     autoStart?: boolean;
   },
@@ -377,11 +401,17 @@ export function createPlayer(
   prepVideo(video);
   video.setAttribute("aria-label", opts.name);
 
+  const snapImg = document.createElement("img");
+  snapImg.className = "player-snap";
+  snapImg.alt = opts.name;
+  snapImg.decoding = "async";
+  snapImg.hidden = true;
+
   const badge = document.createElement("div");
   badge.className = "player-status";
   badge.textContent = "待機";
 
-  root.append(video, badge);
+  root.append(video, snapImg, badge);
 
   let status: PlayerStatus = "idle";
   let stopStream: (() => void) | null = null;
@@ -390,8 +420,30 @@ export function createPlayer(
   let fallbackLock = false;
   let destroyed = false;
   let autoRetryTimer: ReturnType<typeof setTimeout> | null = null;
-  /** User/wall wants this tile live — keep auto-retrying on failure. */
+  /** User/wall wants this tile on — keep auto-retrying on failure. */
   let wantLive = false;
+  let playMode: PlayMode = "live";
+  let forceLive = false;
+  let snapshotIntervalMs = 1000;
+  let snapTimer: ReturnType<typeof setInterval> | null = null;
+  let snapInFlight = false;
+  let baselineDropped = 0;
+  let baselineDecoded = 0;
+
+  const snapshotUrl = (): string => {
+    if (opts.snapshot) return opts.snapshot;
+    // Derive from mse ?src=
+    try {
+      const u = new URL(opts.mse, window.location.origin);
+      const src = u.searchParams.get("src");
+      if (src) {
+        return `/go2rtc/api/frame.jpeg?src=${encodeURIComponent(src)}`;
+      }
+    } catch {
+      /* ignore */
+    }
+    return "";
+  };
 
   const clearAutoRetry = () => {
     if (autoRetryTimer) {
@@ -400,16 +452,61 @@ export function createPlayer(
     }
   };
 
+  const stopSnapshot = () => {
+    if (snapTimer) {
+      clearInterval(snapTimer);
+      snapTimer = null;
+    }
+    snapInFlight = false;
+    snapImg.hidden = true;
+    snapImg.removeAttribute("src");
+    video.hidden = false;
+  };
+
+  const readFrameStats = (): { dropped: number; total: number } => {
+    try {
+      const q = (
+        video as HTMLVideoElement & {
+          getVideoPlaybackQuality?: () => {
+            droppedVideoFrames: number;
+            totalVideoFrames: number;
+          };
+        }
+      ).getVideoPlaybackQuality?.();
+      if (q) {
+        return {
+          dropped: q.droppedVideoFrames || 0,
+          total: q.totalVideoFrames || 0,
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+    // webkitDecodedFrameCount / webkitDroppedFrameCount (Safari)
+    const v = video as HTMLVideoElement & {
+      webkitDecodedFrameCount?: number;
+      webkitDroppedFrameCount?: number;
+    };
+    if (typeof v.webkitDecodedFrameCount === "number") {
+      return {
+        dropped: v.webkitDroppedFrameCount || 0,
+        total: v.webkitDecodedFrameCount || 0,
+      };
+    }
+    return { dropped: 0, total: 0 };
+  };
+
   const scheduleAutoRetry = (err?: string) => {
     clearAutoRetry();
     if (destroyed || !wantLive) return;
+    // In snapshot mode, just keep polling — no 15s dead wait
+    if (playMode === "snapshot" && !forceLive) return;
     const msg = err || "播放失敗";
     badge.hidden = false;
     badge.textContent = `${msg} · 15秒後重試`;
     autoRetryTimer = setTimeout(() => {
       autoRetryTimer = null;
       if (destroyed || !wantLive) return;
-      // Force a full reconnect (both protocols reset)
       stopStream?.();
       stopStream = null;
       triedMse = false;
@@ -433,7 +530,8 @@ export function createPlayer(
     if (s === "connecting") {
       clearAutoRetry();
       badge.hidden = false;
-      badge.textContent = "連線中…";
+      badge.textContent =
+        playMode === "snapshot" && !forceLive ? "預覽載入…" : "連線中…";
       return;
     }
     if (s === "playing") {
@@ -445,10 +543,10 @@ export function createPlayer(
     if (s === "error") {
       badge.hidden = false;
       badge.textContent = err || "無法載入畫面";
+      if (playMode === "snapshot" && !forceLive) return;
       if (fallbackLock) return;
       fallbackLock = true;
       try {
-        // Prefer falling back to the other protocol first…
         if (!triedHls) {
           triedHls = true;
           stopStream?.();
@@ -461,10 +559,8 @@ export function createPlayer(
           stopStream = startMse(video, opts.mse, setStatus);
           return;
         }
-        // …then auto-retry every 15s (HLS / MSE both failed or single-path fail)
         scheduleAutoRetry(err);
       } finally {
-        // allow next error after a tick so nested start can report
         setTimeout(() => {
           fallbackLock = false;
         }, 0);
@@ -472,11 +568,66 @@ export function createPlayer(
     }
   };
 
-  const start = () => {
-    if (destroyed) return;
-    wantLive = true;
+  const pullSnapshot = () => {
+    if (destroyed || !wantLive || snapInFlight) return;
+    const base = snapshotUrl();
+    if (!base) {
+      setStatus("error", "無預覽圖");
+      return;
+    }
+    snapInFlight = true;
+    const url = `${base}${base.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+    const probe = new Image();
+    probe.onload = () => {
+      snapInFlight = false;
+      if (destroyed || !wantLive) return;
+      snapImg.src = url;
+      snapImg.hidden = false;
+      video.hidden = true;
+      setStatus("playing");
+    };
+    probe.onerror = () => {
+      snapInFlight = false;
+      if (destroyed || !wantLive) return;
+      if (status !== "playing") {
+        setStatus("error", "預覽失敗");
+      }
+    };
+    probe.src = url;
+  };
+
+  const startSnapshot = () => {
+    stopStream?.();
+    stopStream = null;
+    clearAutoRetry();
+    try {
+      video.pause();
+    } catch {
+      /* ignore */
+    }
+    video.removeAttribute("src");
+    try {
+      video.load();
+    } catch {
+      /* ignore */
+    }
+    video.hidden = true;
+    root.dataset.mode = "snapshot";
+    setStatus("connecting");
+    pullSnapshot();
+    if (snapTimer) clearInterval(snapTimer);
+    const ms = Math.max(300, snapshotIntervalMs);
+    snapTimer = setInterval(pullSnapshot, ms);
+  };
+
+  const startLive = () => {
+    stopSnapshot();
+    root.dataset.mode = "live";
     // Already connecting / playing — skip re-connect thrash
-    if (status === "connecting" || status === "playing") return;
+    if (status === "connecting" || status === "playing") {
+      // Only if we were already live
+      if (stopStream) return;
+    }
     clearAutoRetry();
     stopStream?.();
     stopStream = null;
@@ -484,6 +635,10 @@ export function createPlayer(
     triedHls = false;
     fallbackLock = false;
     prepVideo(video);
+    video.hidden = false;
+    const stats = readFrameStats();
+    baselineDropped = stats.dropped;
+    baselineDecoded = stats.total;
     if (preferHlsFirst()) {
       triedHls = true;
       stopStream = startHls(video, opts.hls, setStatus);
@@ -493,10 +648,26 @@ export function createPlayer(
     }
   };
 
+  const effectiveMode = (): PlayMode =>
+    forceLive ? "live" : playMode;
+
+  const start = () => {
+    if (destroyed) return;
+    wantLive = true;
+    if (effectiveMode() === "snapshot") {
+      // Snapshot: restart poll even if "playing"
+      startSnapshot();
+      return;
+    }
+    if (status === "connecting" || status === "playing") return;
+    startLive();
+  };
+
   const stop = () => {
     if (destroyed) return;
     wantLive = false;
     clearAutoRetry();
+    stopSnapshot();
     stopStream?.();
     stopStream = null;
     triedMse = false;
@@ -513,10 +684,43 @@ export function createPlayer(
     } catch {
       /* ignore */
     }
+    video.hidden = false;
+    root.dataset.mode = playMode;
     setStatus("idle");
   };
 
+  const setPlayMode = (
+    mode: PlayMode,
+    modeOpts?: { intervalMs?: number; forceLive?: boolean },
+  ) => {
+    if (destroyed) return;
+    if (typeof modeOpts?.forceLive === "boolean") {
+      forceLive = modeOpts.forceLive;
+    }
+    if (modeOpts?.intervalMs != null && modeOpts.intervalMs > 0) {
+      snapshotIntervalMs = modeOpts.intervalMs;
+    }
+    playMode = mode;
+    root.dataset.mode = effectiveMode();
+
+    if (!wantLive) return;
+
+    const next = effectiveMode();
+    if (next === "snapshot") {
+      startSnapshot();
+    } else {
+      // Switch to live: tear down snapshot and (re)start video
+      const wasSnap = Boolean(snapTimer) || !snapImg.hidden;
+      stopSnapshot();
+      if (wasSnap || status === "idle" || status === "error" || !stopStream) {
+        status = "idle";
+        startLive();
+      }
+    }
+  };
+
   root.dataset.status = "idle";
+  root.dataset.mode = "live";
   if (opts.autoStart !== false) {
     start();
   } else {
@@ -529,6 +733,7 @@ export function createPlayer(
       destroyed = true;
       wantLive = false;
       clearAutoRetry();
+      stopSnapshot();
       stopStream?.();
       stopStream = null;
       status = "stopped";
@@ -540,6 +745,7 @@ export function createPlayer(
       clearAutoRetry();
       stopStream?.();
       stopStream = null;
+      stopSnapshot();
       triedMse = false;
       triedHls = false;
       fallbackLock = false;
@@ -550,5 +756,17 @@ export function createPlayer(
     getStatus: () => status,
     isActive: () =>
       wantLive || status === "connecting" || status === "playing",
+    setPlayMode,
+    getPlayMode: () => effectiveMode(),
+    getMetrics: () => {
+      const stats = readFrameStats();
+      return {
+        status,
+        mode: effectiveMode(),
+        droppedFrames: Math.max(0, stats.dropped - baselineDropped),
+        totalFrames: Math.max(0, stats.total - baselineDecoded),
+        wantLive,
+      };
+    },
   };
 }

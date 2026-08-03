@@ -39,6 +39,8 @@ export interface CameraPublic {
   stream: {
     mse: string;
     hls: string;
+    /** Single JPEG frame (go2rtc) — low-FPS wall preview when GPU is weak */
+    snapshot: string;
   };
   createdAt: string;
   updatedAt: string;

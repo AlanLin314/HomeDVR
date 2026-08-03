@@ -1,6 +1,11 @@
 import { listCameras, listGroups, type Camera, type Group } from "./api";
 import { createPlayer, type PlayerHandle } from "./player";
 import { navigate } from "./router";
+import {
+  createPerfController,
+  qualityInfo,
+  type QualityInfo,
+} from "./wall-perf";
 
 const FILTER_KEY = "homedvr.wallGroupFilter";
 
@@ -103,6 +108,52 @@ export async function renderWall(
   let filter: Filter = loadFilter();
   let expandedId: string | null = null;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  let qualityBadge: HTMLElement | null = null;
+  let lastToastTier = 0;
+
+  const perf = createPerfController();
+  let quality: QualityInfo = qualityInfo(0);
+
+  const paintQualityBadge = () => {
+    if (!qualityBadge) return;
+    if (quality.tier === 0) {
+      qualityBadge.hidden = true;
+      qualityBadge.textContent = "";
+      return;
+    }
+    qualityBadge.hidden = false;
+    qualityBadge.textContent = quality.label;
+    qualityBadge.title =
+      "偵測到顯示卡／解碼負載過高，已自動降幀預覽，讓所有攝影機都能顯示。效能回穩後會再嘗試即時串流。";
+  };
+
+  /** Apply live vs low-FPS snapshot mode to every player */
+  const applyQualityToPlayers = () => {
+    for (const [id, handle] of players) {
+      const isExpanded = expandedId === id;
+      handle.setPlayMode(quality.mode, {
+        intervalMs: quality.intervalMs || 1000,
+        forceLive: isExpanded,
+      });
+    }
+  };
+
+  perf.onChange((info, reason) => {
+    quality = info;
+    paintQualityBadge();
+    applyQualityToPlayers();
+    // Toast only when stepping into economy (not every recover)
+    if (info.tier > 0 && info.tier !== lastToastTier) {
+      toast(reason, "ok");
+    }
+    lastToastTier = info.tier;
+  });
+
+  const samplePerf = () => {
+    const metrics = [...players.values()].map((p) => p.getMetrics());
+    perf.sample(metrics);
+  };
+  const perfSampleTimer = window.setInterval(samplePerf, 2200);
 
   // Icon actions on topbar (refresh / fullscreen / cloudflare) — keep theme toggle first
   const tools =
@@ -169,6 +220,11 @@ export async function renderWall(
   chipBar.setAttribute("role", "tablist");
   chipBar.setAttribute("aria-label", "分組篩選");
 
+  qualityBadge = document.createElement("span");
+  qualityBadge.className = "quality-badge";
+  qualityBadge.hidden = true;
+  chipBar.appendChild(qualityBadge);
+
   const wall = document.createElement("div");
   wall.className = "wall";
 
@@ -186,11 +242,21 @@ export async function renderWall(
   /** Desktop: play every camera. Phone/iPad: only visible tiles up to a cap. */
   const reconcileStreams = () => {
     if (!isConstrainedDevice()) {
-      for (const handle of players.values()) handle.start();
+      for (const [id, handle] of players) {
+        handle.setPlayMode(quality.mode, {
+          intervalMs: quality.intervalMs || 1000,
+          forceLive: expandedId === id,
+        });
+        handle.start();
+      }
       return;
     }
 
-    const max = maxConcurrentStreams();
+    // Economy snapshot mode: show all visible tiles (JPEG is cheap)
+    const max =
+      quality.mode === "snapshot"
+        ? Math.max(maxConcurrentStreams() * 3, 12)
+        : maxConcurrentStreams();
     const ranked = [...visibility.entries()]
       .filter(([, ratio]) => ratio > 0)
       .sort((a, b) => {
@@ -201,8 +267,14 @@ export async function renderWall(
       });
 
     const want = new Set(ranked.slice(0, max).map(([id]) => id));
+    // Always keep expanded live
+    if (expandedId) want.add(expandedId);
 
     for (const [id, handle] of players) {
+      handle.setPlayMode(quality.mode, {
+        intervalMs: quality.intervalMs || 1000,
+        forceLive: expandedId === id,
+      });
       if (want.has(id)) {
         handle.start();
       } else {
@@ -220,6 +292,10 @@ export async function renderWall(
     if (!isConstrainedDevice()) {
       for (const [id, handle] of players) {
         visibility.set(id, 1);
+        handle.setPlayMode(quality.mode, {
+          intervalMs: quality.intervalMs || 1000,
+          forceLive: expandedId === id,
+        });
         handle.start();
       }
       return;
@@ -228,8 +304,15 @@ export async function renderWall(
     if (typeof IntersectionObserver === "undefined") {
       // Fallback: start up to the cap in paint order
       let n = 0;
-      const max = maxConcurrentStreams();
+      const max =
+        quality.mode === "snapshot"
+          ? Math.max(maxConcurrentStreams() * 3, 12)
+          : maxConcurrentStreams();
       for (const [id, handle] of players) {
+        handle.setPlayMode(quality.mode, {
+          intervalMs: quality.intervalMs || 1000,
+          forceLive: expandedId === id,
+        });
         if (n < max) {
           visibility.set(id, 1);
           handle.start();
@@ -309,6 +392,12 @@ export async function renderWall(
           `<button type="button" class="chip ${filter === it.id ? "active" : ""}" data-filter="${escapeAttr(String(it.id))}" role="tab" aria-selected="${filter === it.id}">${escapeHtml(it.label)}</button>`,
       )
       .join("");
+
+    // Keep economy-mode badge pinned to the end of the chip bar
+    if (qualityBadge) {
+      chipBar.appendChild(qualityBadge);
+      paintQualityBadge();
+    }
 
     chipBar.querySelectorAll(".chip").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -484,11 +573,18 @@ export async function renderWall(
         name: cam.name,
         mse: cam.stream.mse,
         hls: cam.stream.hls,
+        snapshot: cam.stream.snapshot,
         autoStart: false,
+      });
+      handle.setPlayMode(quality.mode, {
+        intervalMs: quality.intervalMs || 1000,
+        forceLive: expandedId === cam.id,
       });
       players.set(cam.id, handle);
     }
 
+    perf.setCameraCount(cameras.length);
+    paintQualityBadge();
     setupStreamObserver();
   };
 
@@ -547,6 +643,8 @@ export async function renderWall(
   const obs = new MutationObserver(() => {
     if (!document.body.contains(wrap)) {
       destroyAll();
+      perf.destroy();
+      clearInterval(perfSampleTimer);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
       if (resizeTimer) clearTimeout(resizeTimer);
